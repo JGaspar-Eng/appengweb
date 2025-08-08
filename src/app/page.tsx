@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Header from "@/app/components/Header";
+import Header from "@/components/Header";
 import Footer from "@/app/components/Footer";
 
 export default function WelcomePage() {
