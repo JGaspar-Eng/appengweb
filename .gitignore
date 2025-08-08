@@ -1,6 +1,8 @@
-# dependencies
-/node_modules
-/.pnp
+# ================================
+# DEPENDÊNCIAS
+# ================================
+node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -8,49 +10,70 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
+# ================================
+# TESTES
+# ================================
+coverage/
 
-# next.js
-/.next/
-/.next/cache
-/out/
+# ================================
+# NEXT.JS
+# ================================
+.next/
+.next/cache
+out/
 
-# production
-/build
+# ================================
+# PRODUÇÃO / BUILD
+# ================================
+build/
+dist/
+*.tsbuildinfo
 
-# misc
-.DS_Store
-Thumbs.db
-ehthumbs.db
-*.pem
-
-# debug
+# ================================
+# LOGS E DEBUG
+# ================================
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+bun-debug.log*
 lerna-debug.log*
+*.log
 
-# env files
-.env*
+# ================================
+# ARQUIVOS DE AMBIENTE
+# ================================
+.env
+.env.*
 !.env.example
 
-# vercel
-.vercel
+# ================================
+# VERCEL
+# ================================
+.vercel/
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# IDEs and editors
+# ================================
+# SISTEMA / EDITORES
+# ================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
 .vscode/
 .idea/
 *.sublime-workspace
 *.sublime-project
 
-# Jest & Storybook (opcional, caso use)
+# ================================
+# JEST & STORYBOOK (opcional)
+# ================================
 jest.config.js
 jest.setup.js
 .storybook/
 storybook-static/
+
+# ================================
+# CACHE / TEMPORÁRIOS
+# ================================
+.cache/
+.tmp/
+~$*
