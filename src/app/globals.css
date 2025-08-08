@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Paleta Simettria Engenharia - máxima identidade visual */
+:root {
+  --color-bg: #fff;          /* Fundo branco puro */
+  --color-card: #fff;        /* Cartão branco */
+  --color-text: #161735;     /* Azul escuro logo */
+  --color-accent: #48aca8;   /* Verde-água logo */
+}
+
+.dark {
+  --color-bg: #0e1117;       /* Fundo dark sóbrio */
+  --color-card: #171b23;     /* Cartão dark cinza-azulado */
+  --color-text: #e6eaf6;     /* Texto claro */
+  --color-accent: #48aca8;   /* Verde-água permanece igual */
+}
+
+body {
+  @apply bg-[var(--color-bg)] text-[var(--color-text)] transition-colors duration-300;
+  font-family: 'Montserrat', 'Abel', 'Inter', 'sans-serif'; /* Montserrat para títulos/logo */
+}
+
+/* Estilo dos cards */
+.card {
+  @apply bg-[var(--color-card)] rounded-2xl shadow-xl p-6 transition-colors duration-300 border border-transparent hover:border-[var(--color-accent)];
+}
+
+/* Fontes personalizadas para a marca */
+@font-face {
+  font-family: 'Montserrat';
+  src: url('/fonts/Montserrat-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Abel';
+  src: url('/fonts/Abel-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+/* Exemplo de classe para aplicar Montserrat explicitamente */
+.font-logo {
+  font-family: 'Montserrat', 'Abel', 'Inter', 'sans-serif';
+  letter-spacing: 0.02em;
+  font-weight: 800;
+}
+
+/* Ajuste para o header */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background-color: var(--color-card);
+  border: 1px solid #22d3ee; /* Pode ajustar cor da borda para combinar */
+  box-shadow: 0 10px 15px -3px rgb(14 165 233 / 0.1), 0 4px 6px -2px rgb(14 165 233 / 0.05);
+  border-radius: 0 0 1.5rem 1.5rem; /* rounded-b-3xl */
+  padding: 1.25rem 2rem; /* py-5 px-8 */
+}
+
+/* Container do botão de troca de tema no header */
+header > div.flex-shrink-0 {
+  position: relative;
+  z-index: 1000;
+}
+
+/* Para garantir que o botão tema fique visível e no topo */
+.theme-switcher-button {
+  position: relative;
+  z-index: 1000;
+}
