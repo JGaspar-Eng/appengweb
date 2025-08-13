@@ -1,15 +1,21 @@
-'use client';
-
+"use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function LogoutPage() {
   const router = useRouter();
+  const { logout } = useAuth();
 
   useEffect(() => {
-    document.cookie = "user=; path=/; max-age=0";
-    router.push("/login");
-  }, [router]);
+    (async () => {
+      await logout();
+    })();
+  }, [logout]);
 
-  return null;
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <p>Saindo...</p>
+    </div>
+  );
 }

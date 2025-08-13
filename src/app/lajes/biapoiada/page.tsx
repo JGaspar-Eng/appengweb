@@ -1,534 +1,746 @@
+// src/app/lajes/biapoiada/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { CheckCircle, AlertCircle, AlertTriangle } from "lucide-react";
-import TabelaKSimples from "@/components/TabelaKSimples";
+import { useEffect, useMemo, useRef, useState } from "react";
+import InternalHeader from "@/app/components/InternalHeader";
+import Footer from "@/app/components/Footer";
+import SlabSketch from "@/components/SlabSketch";
 import {
   TRELICAS,
   CONCRETOS,
   ACOS,
   TABELA_K,
   TABELA_ACO,
-  BITOLAS,
-  CONCRETO_COLS,
-  ACO_COLS,
-  MAX_BARRAS_SAPATA
+  DIAMETROS_PADRAO,
+  findClosestIdxByKc,
 } from "@/components/constantes";
 
-function percentual(areaFornecida: number, areaMinima: number) {
-  return ((areaFornecida - areaMinima) / areaMinima) * 100;
-}
+// ------------------------------------------------------------------
+// Utils
+// ------------------------------------------------------------------
+const num = (v?: number, d = 3) =>
+  Number.isFinite(v as number) ? (v as number).toFixed(d) : "–";
 
-// Hook de data/hora sem hydration error
-function useNow() {
-  const [now, setNow] = useState("");
-  useEffect(() => {
-    setNow(new Date().toLocaleString());
-    const intv = setInterval(() => setNow(new Date().toLocaleString()), 1000);
-    return () => clearInterval(intv);
+type KeyOf<T> = Extract<keyof T, string>;
+
+// colunas fixas da TABELA_K (mantidas do seu arquivo)
+const COL_CONCRETO: Record<KeyOf<typeof CONCRETOS>, number> = {
+  C20: 1,
+  C25: 2,
+  C30: 3,
+  C35: 4,
+  C40: 5,
+  C45: 6,
+  C50: 7,
+};
+const COL_ACO: Record<KeyOf<typeof ACOS>, number> = {
+  CA25: 8,
+  CA50: 9,
+  CA60: 10,
+};
+const getBx = (row: number[]) => row[0];
+const getKc = (row: number[], c: KeyOf<typeof CONCRETOS>) =>
+  row[COL_CONCRETO[c]] ?? null;
+const getKs = (row: number[], s: KeyOf<typeof ACOS>) =>
+  (row[COL_ACO[s]] ?? null) as number | null;
+
+// tipo auxiliar para acessar os campos extras que você incluiu nas treliças
+type TreExt = {
+  bw: number;
+  bf: number;
+  h: number; // total (mesa + treliça + cobrimentos) conforme seu constantes
+  hf: number;
+  d: number;
+  h_trelica_cm?: number;
+  arm?: {
+    top_mm: number;
+    diag_mm: number;
+    base_mm: number;
+  };
+};
+
+// comprimento necessário para acomodar n barras φ com espaçamento livre s_min
+const L_ocupado_cm = (n: number, phi_cm: number, smin_cm: number) =>
+  n * phi_cm + (n - 1) * smin_cm;
+
+// largura “dentro da mesa”: entre as duas barras da base + cobrimentos
+const larguraUtilDentro = (
+  tre: TreExt,
+  c_inf_cm: number,
+  phi_base_cm: number
+) => tre.bw - 2 * c_inf_cm - 2 * phi_base_cm;
+
+// largura “fora” a uma cota y acima da mesa (entre diagonais – aproximação linear)
+const larguraEntreDiagonais = (tre: TreExt, y_cm: number) => {
+  const htri = tre.h_trelica_cm ?? tre.h - 4; // fallback
+  const bw = tre.bw;
+  const fator = Math.max(0, 1 - y_cm / Math.max(0.01, htri));
+  return bw * fator;
+};
+
+// área geométrica de uma bitola (cm²)
+const areaBitola = (diam_mm: number) =>
+  (Math.PI * (diam_mm / 10) ** 2) / 4.0;
+
+// pequeno helper para montar “1Ø12,5”
+const descArranjo = (n: number, diam: number) => `${n}Ø${diam}`;
+
+type Sugestao = {
+  n: number;
+  diam: number;
+  area: number; // cm²
+  sobra: number; // area - AsNec
+  cabe: boolean;
+  L: number; // cm
+};
+
+// ------------------------------------------------------------------
+// Componente
+// ------------------------------------------------------------------
+export default function LajeBiapoiadaPage() {
+  // escolhas padrão
+  const [trelicaKey, setTrelicaKey] =
+    useState<KeyOf<typeof TRELICAS>>("TR12645");
+  const [concretoKey, setConcretoKey] =
+    useState<KeyOf<typeof CONCRETOS>>("C30");
+  const [acoKey, setAcoKey] = useState<KeyOf<typeof ACOS>>("CA50");
+
+  // Lx x Ly -> menor vão L
+  const [Lx, setLx] = useState(5.3);
+  const [Ly, setLy] = useState(3.85);
+  const [L, setL] = useState(3.85);
+
+  // carga superficial característica (variável + permanentes “não PP da LT”)
+  const [qBase, setQBase] = useState(5); // kN/m² (editável)
+  const [usarPP, setUsarPP] = useState(true);
+
+  // agregado máximo e s_min (norma)
+  const [dAgg_mm, setDAgg] = useState(19); // 19/25 etc.
+
+  // posição das barras adicionais: dentro da mesa | fora (sobre a mesa)
+  const [pos, setPos] = useState<"dentro" | "fora">("dentro");
+  const [yFora_cm, setYFora] = useState(0.43); // 4,3 mm padrão
+
+  // linha da tabela K
+  const [kIdxEscolhido, setKIdxEscolhido] = useState<number | null>(null);
+
+  // escolha de arranjo
+  const [selN, setSelN] = useState<number | null>(null);
+  const [selDiam, setSelDiam] = useState<number | null>(null);
+
+  // PDF
+  const arranjoRef = useRef<HTMLDivElement>(null);
+
+  // quando Lx/Ly mudam, define L = menor
+  useEffect(() => setL(Math.min(Lx, Ly)), [Lx, Ly]);
+
+  const menorVao: "Lx" | "Ly" | null =
+    !isFinite(Lx) || !isFinite(Ly) ? null : Lx <= Ly ? "Lx" : "Ly";
+
+  // dados auxiliares
+  const tre: TreExt = TRELICAS[trelicaKey] as any;
+  const conc = CONCRETOS[concretoKey];
+  const aco = ACOS[acoKey];
+
+  // largura tributária (m) -> mesmo critério seu (bf/100)
+  const bf_m = tre.bf / 100;
+
+  // estimativa simples de PP da LT (desligável):
+  // PP = γ * [ capa(hf) + fração de nervura por m² ],
+  // fração_nerv = (bw*(h-hf)/10000) / bf_m
+  const gamma_conc = 25; // kN/m³
+  const capa_m = tre.hf / 100; // m
+  const nerv_m =
+    (tre.bw * Math.max(0, tre.h - tre.hf) /*cm²*/ / 10000) / bf_m; // m
+  const PP_kN_m2 = gamma_conc * (capa_m + nerv_m); // kN/m²
+
+  const qTotal_kN_m2 = usarPP ? qBase + PP_kN_m2 : qBase;
+
+  // carga por metro de nervura
+  const qLinha = qTotal_kN_m2 * bf_m; // kN/m
+
+  // esforços
+  const Vk = (qLinha * L) / 2; // kN
+  const Mk_kNm = (qLinha * L * L) / 8; // kN·m
+  const Md_kNcm = Mk_kNm * 1.4 * 100; // ELU + conversão
+
+  // parâmetro do professor: Kc = (bw*d²)/Md
+  const Kc = (tre.bw * tre.d * tre.d) / Md_kNcm;
+
+  const kIdxSugerido = useMemo(() => findClosestIdxByKc(Kc), [Kc]);
+  const linha = kIdxEscolhido != null ? TABELA_K[kIdxEscolhido] : null;
+
+  // Bx, ks, x, verificação T
+  const Bx = linha ? getBx(linha) : undefined;
+  const ks = linha ? getKs(linha, acoKey) : undefined;
+  const x = Bx != null ? Bx * tre.d : undefined;
+  const ehT = x != null ? x > 1.25 * tre.hf : undefined;
+
+  // área de aço (método ks) – desconto 0,40 da treliça
+  const As = ks != null ? (ks * Md_kNcm) / tre.d : undefined;
+  const AsAdotar =
+    As != null ? Math.max(As - 0.4 /*cm²*/, 0) : undefined;
+
+  // ------------------- Normativa: s_min -------------------
+  // s_min = max(phi, 2, 1,2 * dAgg)
+  const sminFromPhi = (phi_cm: number) =>
+    Math.max(phi_cm, 2.0, (1.2 * dAgg_mm) / 10); // cm
+
+  // larguras disponíveis
+  const phiBase_cm = (tre.arm?.base_mm ?? 5) / 10;
+  const larguraDentro_cm = larguraUtilDentro(tre, 1.5, phiBase_cm); // c_inf = 1,5 cm
+  const larguraFora_cm = larguraEntreDiagonais(tre, yFora_cm);
+
+  // gera candidatas de arranjos com base nos diâmetros padrão e 1..10 barras
+  const candidatas: { n: number; diam: number; area: number }[] = useMemo(() => {
+    const out: { n: number; diam: number; area: number }[] = [];
+    for (const diam of DIAMETROS_PADRAO) {
+      const areas = TABELA_ACO[diam]; // [1 barra, 2 barras, ...]
+      areas.forEach((a, i) => {
+        out.push({ n: i + 1, diam, area: a });
+      });
+    }
+    return out;
   }, []);
-  return now;
-}
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0 items-start">
-      <label className="font-semibold text-cyan-800 dark:text-cyan-200 text-xs">{label}</label>
-      {children}
-    </div>
-  );
-}
+  // classifica candidatas para “pos” e “AsAdotar”
+  const { cabem, naoCabem } = useMemo(() => {
+    const resultCabem: Sugestao[] = [];
+    const resultNao: Sugestao[] = [];
 
-export default function LajeBiapoiada() {
-  // States do projeto
-  const [nomeProjeto, setNomeProjeto] = useState("");
-  const [localObra, setLocalObra] = useState("");
-  const [trelica, setTrelica] = useState("TR12");
-  const [concreto, setConcreto] = useState("C30");
-  const [aco, setAco] = useState("CA50");
-  const [vao, setVao] = useState("3.85");
-  const [carga, setCarga] = useState("5.0");
-  const [linhaKSel, setLinhaKSel] = useState<any>(null);
-  const [barrasSel, setBarrasSel] = useState<any>(null);
+    if (AsAdotar == null) return { cabem: resultCabem, naoCabem: resultNao };
 
-  // Dados geométricos/mecânicos
-  const { bw, bf, h, hf, d } = TRELICAS[trelica];
-  const fck = CONCRETOS[concreto];
-  const fyk = ACOS[aco];
-  const now = useNow();
+    const largura = pos === "dentro" ? larguraDentro_cm : larguraFora_cm;
 
-  // --- Cálculos principais --- //
-  let fcd = "", fyd = "", q = "", Vk = "", Mk = "", Md = "", Kc = "", x = "", secaoT = null;
-  let asCalculada = "", asEfetiva = "", bx = "", ks = "";
-  let opcoesBarras: any[] = [];
-
-  if (vao && carga) {
-    const l = Number(vao);
-    const cargaNum = Number(carga.replace(",", "."));
-    fcd = (fck / 1.4 / 10).toFixed(3);
-    fyd = (fyk / 1.15 / 10).toFixed(3);
-    const qValue = +(cargaNum * 0.42).toFixed(3);
-    q = qValue.toFixed(3);
-    const VkValue = +(qValue * l / 2).toFixed(3);
-    Vk = VkValue.toFixed(3);
-    const MkValue = +(qValue * Math.pow(l, 2) / 8).toFixed(3);
-    Mk = MkValue.toFixed(3);
-    const MdValue = +(MkValue * 1.4 * 100).toFixed(3);
-    Md = MdValue.toFixed(3);
-    Kc = +(bw * Math.pow(d, 2) / MdValue).toFixed(3);
-
-    // Busca na tabela K — linha mais próxima do Kc
-    const kcCol = CONCRETO_COLS[concreto];
-    const acoCol = ACO_COLS[aco];
-    let idxKcMaisProx = -1, menorDiff = Infinity;
-    TABELA_K.forEach((linha, i) => {
-      const diff = Math.abs(linha[kcCol] - Number(Kc));
-      if (diff < menorDiff) {
-        menorDiff = diff;
-        idxKcMaisProx = i;
-      }
-    });
-    const linhaSugerida = TABELA_K[idxKcMaisProx];
-    const linhaParaCálculo = linhaKSel || linhaSugerida;
-    bx = linhaParaCálculo ? linhaParaCálculo[0] : "";
-    ks = linhaParaCálculo ? linhaParaCálculo[acoCol] : "";
-
-    // Cálculo da linha neutra e verificação da seção T
-    if (bx && d) {
-      x = (bx * d).toFixed(3);
-      secaoT = Number(x) <= 1.25 * hf; // TRUE: retangular, FALSE: T
+    for (const c of candidatas) {
+      if (c.area < AsAdotar - 1e-9) continue; // só ≥ AsNec
+      const phi_cm = c.diam / 10;
+      const smin = sminFromPhi(phi_cm);
+      const L = L_ocupado_cm(c.n, phi_cm, smin);
+      const cabe = L <= largura + 1e-9;
+      const sug: Sugestao = {
+        n: c.n,
+        diam: c.diam,
+        area: c.area,
+        sobra: c.area - AsAdotar,
+        cabe,
+        L,
+      };
+      (cabe ? resultCabem : resultNao).push(sug);
     }
+    // ordenar por sobra (econômico)
+    resultCabem.sort((a, b) => a.sobra - b.sobra || a.area - b.area);
+    resultNao.sort((a, b) => a.sobra - b.sobra || a.area - b.area);
+    return { cabem: resultCabem, naoCabem: resultNao };
+  }, [AsAdotar, pos, larguraDentro_cm, larguraFora_cm, candidatas, dAgg_mm]);
 
-    // ARMADURA (método clássico)
-    if (secaoT === true && ks && MdValue && d) {
-      asCalculada = (ks * (MdValue / d)).toFixed(3);
-      asEfetiva = (Number(asCalculada) - 0.4).toFixed(3);
-    } else if (secaoT === false) {
-      asCalculada = "";
-      asEfetiva = "";
+  // garantir que seleção inválida “caia” fora se trocar posição
+  useEffect(() => {
+    if (!selN || !selDiam) return;
+    const found = cabem.find((s) => s.n === selN && s.diam === selDiam);
+    if (!found) {
+      setSelN(null);
+      setSelDiam(null);
     }
+  }, [pos, cabem, selN, selDiam]);
 
-    // SUGESTÃO DE BARRAS (com PROIBIDO e espaçamento)
-    if (asEfetiva && Number(asEfetiva) > 0) {
-      opcoesBarras = [];
-      for (let diam of BITOLAS) {
-        for (let n = 1; n <= 10; n++) {
-          const areaTot = TABELA_ACO[diam][n - 1];
-          if (!areaTot) continue;
-          let local = "sobre a sapata";
-          let proibido = false;
-          if (MAX_BARRAS_SAPATA[diam] && n <= MAX_BARRAS_SAPATA[diam]) {
-            local = "dentro da sapata";
-          }
-          if (MAX_BARRAS_SAPATA[diam] && n > MAX_BARRAS_SAPATA[diam] && local === "dentro da sapata") {
-            proibido = true;
-          }
-          if (areaTot >= Number(asEfetiva) && areaTot <= Number(asEfetiva) * 2) {
-            opcoesBarras.push({ n, diam, areaTot: areaTot.toFixed(3), local, proibido });
-          }
-        }
-      }
-      opcoesBarras.sort((a, b) => Number(a.areaTot) - Number(b.areaTot));
-    }
-  }
+  // helpers de click
+  const selecionar = (s: Sugestao) => {
+    if (!s.cabe) return; // não permite selecionar inválida
+    setSelN(s.n);
+    setSelDiam(s.diam);
+  };
 
-  // Para destacar linha da tabela K
-  const kcCol = CONCRETO_COLS[concreto];
-  const acoCol = ACO_COLS[aco];
-  let idxKcMaisProx = -1,
-    menorDiff = Infinity;
-  if (Kc) {
-    TABELA_K.forEach((linha, i) => {
-      const diff = Math.abs(linha[kcCol] - Number(Kc));
-      if (diff < menorDiff) {
-        menorDiff = diff;
-        idxKcMaisProx = i;
-      }
-    });
-  }
+  // PDF simplificado (carimbo + arranjo)
+  const exportPDF = async () => {
+    const [html2canvas, jsPDF] = await Promise.all([
+      import("html2canvas"),
+      import("jspdf"),
+    ]);
+    const canvas = await html2canvas.default(document.body, { scale: 2 });
+    const img = canvas.toDataURL("image/png");
+    const pdf = new jsPDF.jsPDF({ unit: "pt", format: "a4" });
+    const w = pdf.internal.pageSize.getWidth() - 72;
+    const h = (canvas.height * w) / canvas.width;
+    pdf.text("Laje biapoiada — Carimbo do dimensionamento", 40, 40);
+    pdf.addImage(img, "PNG", 36, 60, w, h);
+    pdf.save("laje_biapoiada.pdf");
+  };
 
-  // Sugestão de treliça se seção T
-  const trelicasDisponiveis = Object.entries(TRELICAS)
-    .map(([key, val]) => ({ key, ...val }))
-    .filter((t) => t.d > d)
-    .sort((a, b) => a.d - b.d);
-  const sugestaoTrelica = trelicasDisponiveis.length > 0 ? trelicasDisponiveis[0] : null;
+  // seleção sugerida de tabela K (amarelo) / escolhida (ciano)
+  const kIdxSugerida = kIdxSugerido;
 
-  // Função para calcular espaçamento em cm para as barras escolhidas
-  function getEspacamento(barrasQtd: number) {
-    const base = 42; // largura da mesa, em cm (bf)
-    if (barrasQtd < 2) return "-";
-    const espac7 = (base - 2) / (barrasQtd - 1);
-    const espac8 = (base - 2) / (barrasQtd - 1);
-    return {
-      espac7: Math.round(espac7 * 10) / 10,
-      espac8: Math.round(espac8 * 10) / 10,
-    };
-  }
-
-  // Observação dinâmica — só as barras econômicas e não proibidas
-  const economicas = opcoesBarras.filter(
-    (b) => percentual(Number(b.areaTot), Number(asEfetiva)) <= 30 && !b.proibido
-  );
-  let obsPreferencial = "";
-  if (economicas.length > 0) {
-    obsPreferencial = economicas
-      .map((b) => `${b.n}Ø${b.diam}mm (${b.local === "dentro da sapata" ? "dentro" : "sobre"})`)
-      .join(" ou ");
-  } else {
-    obsPreferencial = "Consulte o engenheiro estrutural para solução customizada.";
-  }
+  // seleção de qual linha mostrar como “sugerida” na UI
+  const headerTabelaSugerida =
+    kIdxSugerida >= 0 ? `linha ${kIdxSugerida + 1}` : "—";
 
   return (
-    <div className="max-w-4xl mx-auto mt-6 p-5 bg-gradient-to-tr from-slate-50 to-slate-200 dark:from-neutral-900 dark:to-neutral-800 rounded-2xl shadow-2xl">
-      {/* TOPO: Campos do projeto e botão imprimir */}
-      <div className="flex flex-wrap items-center justify-between mb-4 gap-2 print:hidden">
-        <div className="flex gap-2 flex-wrap">
-          <input
-            type="text"
-            className="border px-2 py-1 rounded text-xs w-44"
-            value={nomeProjeto}
-            onChange={(e) => setNomeProjeto(e.target.value)}
-            placeholder="Nome do Projeto"
-          />
-          <input
-            type="text"
-            className="border px-2 py-1 rounded text-xs w-44"
-            value={localObra}
-            onChange={(e) => setLocalObra(e.target.value)}
-            placeholder="Local da Obra"
-          />
-        </div>
-        <button
-          className="px-3 py-1 bg-cyan-700 text-white rounded-xl font-semibold shadow hover:bg-cyan-900 text-xs transition"
-          onClick={() => window.print()}
-        >
-          Imprimir relatório
-        </button>
-      </div>
+    <main className="min-h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-text)]">
+      <InternalHeader
+        title="Laje Biapoiada"
+        showBackButton
+        backHref="/calculadoras"
+      />
 
-      <h1 className="text-2xl font-extrabold mb-2 tracking-tight text-cyan-900 dark:text-cyan-300">
-        Dimensionamento Premium — Laje Biapoiada
-      </h1>
-
-      {/* Linha de seleção: campos compactos lado a lado */}
-      <div className="flex flex-wrap gap-2 mb-4 items-center">
-        <Field label="Treliça">
-          <select
-            className="w-28 border border-cyan-200 rounded-lg px-2 py-1 text-xs"
-            value={trelica}
-            onChange={(e) => {
-              setTrelica(e.target.value);
-              setLinhaKSel(null);
-            }}
-          >
-            {Object.keys(TRELICAS).map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Concreto">
-          <select
-            className="w-24 border border-cyan-200 rounded-lg px-2 py-1 text-xs"
-            value={concreto}
-            onChange={(e) => {
-              setConcreto(e.target.value);
-              setLinhaKSel(null);
-            }}
-          >
-            {Object.keys(CONCRETOS).map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Aço">
-          <select
-            className="w-24 border border-cyan-200 rounded-lg px-2 py-1 text-xs"
-            value={aco}
-            onChange={(e) => {
-              setAco(e.target.value);
-              setLinhaKSel(null);
-            }}
-          >
-            {Object.keys(ACOS).map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Vão (m)">
-          <input
-            className="w-20 border border-cyan-200 rounded-lg px-2 py-1 text-xs"
-            placeholder="3.85"
-            value={vao}
-            onChange={(e) => setVao(e.target.value)}
-            type="number"
-            min="0"
-            step="0.001"
-          />
-        </Field>
-        <Field label="Carga (kN/m²)">
-          <input
-            className="w-20 border border-cyan-200 rounded-lg px-2 py-1 text-xs"
-            value={carga}
-            onChange={(e) => setCarga(e.target.value)}
-            type="number"
-            min="0"
-            step="0.001"
-          />
-        </Field>
-      </div>
-
-      {/* Linhas de dados */}
-      <div className="flex flex-wrap gap-5 mb-2 text-base font-semibold">
-        <span>
-          <b>bw:</b> {bw} cm
-        </span>
-        <span>
-          <b>bf:</b> {bf} cm
-        </span>
-        <span>
-          <b>h:</b> {h} cm
-        </span>
-        <span>
-          <b>hf:</b> {hf} cm
-        </span>
-        <span>
-          <b>d:</b> {d} cm
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-5 mb-2 text-base">
-        <span>
-          <b>fck:</b> {fck} MPa
-        </span>
-        <span>
-          <b>fcd:</b> {fcd} kN/cm²
-        </span>
-        <span>
-          <b>fyk:</b> {fyk} MPa
-        </span>
-        <span>
-          <b>fyd:</b> {fyd} kN/cm²
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-5 mb-4 text-base">
-        <span>
-          <b>q:</b> {q} kN/m
-        </span>
-        <span>
-          <b>Vk:</b> {Vk} kN
-        </span>
-        <span>
-          <b>Mk:</b> {Mk} kN·m
-        </span>
-        <span>
-          <b>Md:</b> {Md} kN·cm
-        </span>
-        <span>
-          <b>Kc:</b> {Kc}
-        </span>
-      </div>
-
-      {/* Tabela K premium, só colunas certas */}
-      {(vao && carga) && (
-        <div className="overflow-auto mb-4">
-          <table className="min-w-full border rounded-xl shadow text-xs">
-            <thead>
-              <tr className="bg-cyan-100 dark:bg-cyan-900 text-cyan-900 dark:text-cyan-100">
-                <th className="border px-2">βx</th>
-                <th className="border px-2">Kc {concreto}</th>
-                <th className="border px-2">Ks {aco}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {TABELA_K.map((linha, idx) => {
-                const isSugestao = idx === idxKcMaisProx;
-                const isSelecionada = linhaKSel === linha;
-                let bg = "";
-                if (isSelecionada) bg = "bg-green-100 dark:bg-green-800 font-bold";
-                else if (isSugestao) bg = "bg-yellow-100 dark:bg-yellow-800 font-bold";
-                return (
-                  <tr
-                    key={idx}
-                    className={`${bg} transition-all duration-150 cursor-pointer hover:bg-cyan-50 dark:hover:bg-cyan-950`}
-                    onClick={() => {
-                      setLinhaKSel(linha);
-                      setBarrasSel(null);
-                    }}
-                  >
-                    <td className="border px-2">{linha[0]}</td>
-                    <td className="border px-2">{linha[CONCRETO_COLS[concreto]]}</td>
-                    <td className="border px-2">{linha[ACO_COLS[aco]]}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Advertência seção T */}
-      {(secaoT === false && x) && (
-        <div className="my-4 flex items-center gap-2 p-4 bg-yellow-50 dark:bg-yellow-900 border-l-4 border-yellow-500 text-yellow-800 dark:text-yellow-100 rounded-lg">
-          <AlertTriangle className="w-7 h-7 text-yellow-700 dark:text-yellow-200" />
-          <div>
-            <b>Seção T detectada – Não recomendada para lajes treliçadas</b><br />
-            O cálculo indica que a linha neutra (<b>x = {x} cm</b>) ultrapassa o limite da mesa de compressão (<b>1,25 × hf = {(1.25 * hf).toFixed(3)} cm</b>), configurando seção T.
-            <div className="mt-2">
-              <b>Nas lajes treliçadas, o uso de seção T é antieconômico e inviável na prática.</b> Sugerimos trocar para <b>{sugestaoTrelica ? sugestaoTrelica.key : "—"}</b> (d = <b>{sugestaoTrelica ? sugestaoTrelica.d : "—"} cm</b>).
-              {sugestaoTrelica && (
-                <button
-                  onClick={() => {
-                    setTrelica(sugestaoTrelica.key);
-                    setLinhaKSel(null);
-                    setBarrasSel(null);
-                  }}
-                  className="ml-2 px-3 py-1 bg-cyan-700 text-white rounded-xl shadow hover:bg-cyan-900 transition text-xs"
-                >
-                  Usar treliça sugerida
-                </button>
-              )}
+      <div className="container mx-auto px-4 py-6 max-w-6xl">
+        {/* Geometria e carga */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="card p-4">
+            <h2 className="font-bold mb-3">Geometria da laje (Lx × Ly)</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-sm">
+                Lx (m)
+                <input
+                  type="number"
+                  step={0.01}
+                  className="mt-1 w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
+                  value={Lx}
+                  onChange={(e) => setLx(parseFloat(e.target.value))}
+                />
+              </label>
+              <label className="text-sm">
+                Ly (m)
+                <input
+                  type="number"
+                  step={0.01}
+                  className="mt-1 w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
+                  value={Ly}
+                  onChange={(e) => setLy(parseFloat(e.target.value))}
+                />
+              </label>
+            </div>
+            <div className="mt-3 flex justify-center">
+              <SlabSketch Lx={Lx} Ly={Ly} menor={menorVao} />
+            </div>
+            <div className="mt-2 text-sm">
+              Menor vão adotado: <b>{num(L, 2)} m</b> ({menorVao ?? "—"})
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Detalhes do cálculo retangular */}
-      {(linhaKSel || (vao && carga && TABELA_K.length > 0)) && secaoT === true && (
-        <div className="mt-2 mb-3 p-3 rounded-xl bg-green-50 dark:bg-green-900 border border-green-300 dark:border-green-800 text-sm flex items-center gap-2">
-          <CheckCircle className="w-5 h-5 text-green-700 dark:text-green-200" />
-          <div>
-            <div>βx: {bx} | bx·d = x = {x} cm</div>
-            <div>Seção T: <span className="text-green-700 dark:text-green-200 font-bold">Falsa (Retangular)</span> ({x} ≤ 1,25·hf = {(1.25 * hf).toFixed(3)} cm)</div>
-            <div>As = ks × (Md/d) = {ks} × ({Md}/{d}) = <b>{asCalculada} cm²</b> | Área efetiva (As’ = As - 0,4): <b>{asEfetiva} cm²</b></div>
-          </div>
-        </div>
-      )}
+          <div className="card p-4">
+            <h2 className="font-bold mb-3">Carregamento</h2>
+            <label className="text-sm">
+              q<sub>base</sub> (kN/m²)
+              <input
+                type="number"
+                step={0.1}
+                className="mt-1 w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
+                value={qBase}
+                onChange={(e) => setQBase(parseFloat(e.target.value))}
+              />
+            </label>
 
-      {/* Sugestão de barras — ECONÔMICA/PROIBIDO/ESPACAMENTO */}
-      {(linhaKSel || (vao && carga && TABELA_K.length > 0)) && asEfetiva && (
-        <div className="mb-3">
-          <h3 className="font-bold mb-2 text-cyan-900 dark:text-cyan-300 text-sm">Escolha a armadura (econômica/prática):</h3>
-          <table className="min-w-max border rounded-xl shadow text-xs">
-            <thead>
-              <tr className="bg-cyan-100 dark:bg-cyan-900 text-cyan-900 dark:text-cyan-100">
-                <th>Barras</th><th>Ø (mm)</th><th>Área fornecida (cm²)</th><th>Localização</th><th>% acima do mínimo</th><th>Espaçamento (7-8cm)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {opcoesBarras.map((op, idx) => {
-                const perc = percentual(Number(op.areaTot), Number(asEfetiva));
-                let bg = "";
-                let nota = "";
-                let icon = null;
-                if (op.proibido) {
-                  bg = "bg-neutral-200 dark:bg-neutral-800 text-neutral-400 font-semibold";
-                  nota = "PROIBIDO";
-                } else if (perc <= 30) { bg = "bg-green-100 dark:bg-green-800 font-bold"; nota = "✓ Econômica"; icon = <CheckCircle className="inline w-4 h-4 text-green-700 dark:text-green-200" />; }
-                else if (perc <= 100) { bg = "bg-yellow-100 dark:bg-yellow-800"; nota = "! Excesso comercial"; icon = <AlertCircle className="inline w-4 h-4 text-yellow-700 dark:text-yellow-200" />; }
-                else { bg = "bg-red-100 dark:bg-red-900"; nota = "!! Desperdício"; icon = <AlertTriangle className="inline w-4 h-4 text-red-700 dark:text-red-200" />; }
-                // Espaçamento (só sugere se não proibido e for barras >1)
-                let espacamento = "-";
-                if (!op.proibido && op.n > 1) {
-                  const { espac7, espac8 } = getEspacamento(op.n);
-                  espacamento = `7cm: ${espac7}cm | 8cm: ${espac8}cm`;
-                }
-                return (
-                  <tr
-                    key={idx}
-                    className={`${bg} transition-all duration-150 cursor-pointer hover:bg-cyan-50 dark:hover:bg-cyan-950`}
-                    onClick={() => !op.proibido && setBarrasSel(op)}
-                  >
-                    <td>{op.n}</td>
-                    <td>{op.diam}</td>
-                    <td>{op.areaTot}</td>
-                    <td>{op.local}</td>
-                    <td>
-                      {perc.toFixed(0)}% {icon}
-                      <span className="ml-1 text-xs">{nota}</span>
-                    </td>
-                    <td>{espacamento}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="text-xs mt-2 text-gray-700 dark:text-gray-200">
-            <b>Nota:</b> Opte sempre pelo <span className="text-green-700 dark:text-green-200 font-bold">verde</span>. Cinza/PROIBIDO: nunca utilizar. Amarelo: excesso comercial. Vermelho: desperdício/congestionamento.
-          </div>
-        </div>
-      )}
-
-      {/* Desenho SVG premium da mesa da treliça */}
-      {barrasSel && !barrasSel.proibido && (
-        <div className="flex flex-col items-center my-4">
-          <span className="mb-2 font-semibold text-xs">Desenho esquemático da mesa da treliça:</span>
-          <svg width="260" height="80">
-            {/* Sapata inferior da treliça */}
-            <rect x="30" y="60" width="200" height="16" fill="#333" stroke="#888" rx="8" ry="8" />
-            {/* Barras alinhadas */}
-            {(() => {
-              const N = barrasSel.n;
-              const diam = barrasSel.diam;
-              const xStart = 50, xEnd = 210;
-              if (N === 1) {
-                return (
-                  <circle
-                    cx={xStart + (xEnd - xStart) / 2}
-                    cy={barrasSel.local === "dentro da sapata" ? 68 : 54}
-                    r={diam * 1.1}
-                    fill={barrasSel.local === "dentro da sapata" ? "#1976d2" : "#a21caf"}
-                    stroke={barrasSel.local === "dentro da sapata" ? "white" : "black"}
-                    strokeWidth={1}
-                  />
-                );
-              }
-              const spacing = (xEnd - xStart) / (N - 1);
-              return [...Array(N)].map((_, i) => (
-                <circle
-                  key={i}
-                  cx={xStart + i * spacing}
-                  cy={barrasSel.local === "dentro da sapata" ? 68 : 54}
-                  r={diam * 1.1}
-                  fill={barrasSel.local === "dentro da sapata" ? "#1976d2" : "#a21caf"}
-                  stroke={barrasSel.local === "dentro da sapata" ? "white" : "black"}
-                  strokeWidth={1}
+            <div className="mt-3 text-sm">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={usarPP}
+                  onChange={(e) => setUsarPP(e.target.checked)}
                 />
-              ));
-            })()}
-          </svg>
-          <div className="mt-2 font-semibold text-cyan-900 dark:text-cyan-300 text-xs">
-            Armadura escolhida: {barrasSel.n} Ø {barrasSel.diam} mm ({barrasSel.local})<br />
-            Área fornecida: {barrasSel.areaTot} cm²
+                Somar PP estimado da LT
+              </label>
+              <div className="opacity-80">
+                PP ≈ 25·[ hf/100 + (bw·(h−hf)/10000)/bf(m) ] ={" "}
+                <b>{num(PP_kN_m2, 3)}</b> kN/m²
+              </div>
+              <div>
+                q<sub>total</sub> = <b>{num(qTotal_kN_m2, 3)}</b> kN/m²
+              </div>
+              <div className="opacity-80">
+                Largura tributária bf = <b>{num(bf_m, 2)}</b> m → q' ={" "}
+                <b>{num(qLinha, 3)}</b> kN/m
+              </div>
+            </div>
           </div>
-          <div className="text-xs text-gray-600 mt-1 flex gap-2 items-center">
-            <span className="inline-block w-4 h-4 align-middle" style={{ background: "#333" }}></span> Sapata da treliça
-            <span className="inline-block w-4 h-4 align-middle rounded-full" style={{ background: "#1976d2" }}></span> Barra dentro
-            <span className="inline-block w-4 h-4 align-middle rounded-full" style={{ background: "#a21caf" }}></span> Barra sobre
-          </div>
-        </div>
-      )}
 
-      {/* Observação automática premium (dinâmica) */}
-      <div className="bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 rounded-xl px-3 py-2 mt-6 mb-2 text-xs">
-        <b>Observação:</b> Escolha preferencial: {obsPreferencial}.
+          <div className="card p-4">
+            <h2 className="font-bold mb-3">Vão adotado</h2>
+            <label className="text-sm">
+              L (m)
+              <input
+                type="number"
+                step={0.01}
+                className="mt-1 w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
+                value={L}
+                onChange={(e) => setL(parseFloat(e.target.value))}
+              />
+            </label>
+            <div className="text-sm opacity-80 mt-2">
+              Você pode sobrescrever o menor vão manualmente se precisar.
+            </div>
+          </div>
+        </section>
+
+        {/* Materiais / Treliça */}
+        <section className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <div className="md:col-span-2">
+            <label className="block mb-1 font-semibold">Treliça</label>
+            <select
+              className="w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
+              value={trelicaKey}
+              onChange={(e) => {
+                setTrelicaKey(e.target.value as any);
+                setKIdxEscolhido(null);
+                setSelN(null);
+                setSelDiam(null);
+              }}
+            >
+              {Object.entries(TRELICAS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {/* mostra o nome legível se existir, senão a chave */}
+                  {(v as any).displayName ?? k}
+                </option>
+              ))}
+            </select>
+
+            <div className="mt-2 text-sm opacity-80 grid grid-cols-2 gap-x-4">
+              <div>bw: <b>{tre.bw} cm</b></div>
+              <div>bf: <b>{tre.bf} cm</b></div>
+              <div>h: <b>{tre.h} cm</b></div>
+              <div>hf: <b>{tre.hf} cm</b></div>
+              <div>d: <b>{tre.d} cm</b></div>
+              <div>
+                φbase/φdiag/φtop:{" "}
+                <b>
+                  {(tre.arm?.base_mm ?? 5).toFixed(1)} /{" "}
+                  {(tre.arm?.diag_mm ?? 4.2).toFixed(1)} /{" "}
+                  {(tre.arm?.top_mm ?? 6).toFixed(1)} mm
+                </b>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block mb-1 font-semibold">Concreto</label>
+            <select
+              className="w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
+              value={concretoKey}
+              onChange={(e) => {
+                setConcretoKey(e.target.value as any);
+                setKIdxEscolhido(null);
+              }}
+            >
+              {Object.keys(CONCRETOS).map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+            <div className="mt-2 text-sm opacity-80">
+              fcd: <b>{num(conc.fcd, 3)}</b> kN/cm²
+            </div>
+          </div>
+
+          <div>
+            <label className="block mb-1 font-semibold">Aço</label>
+            <select
+              className="w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
+              value={acoKey}
+              onChange={(e) => {
+                setAcoKey(e.target.value as any);
+                setKIdxEscolhido(null);
+              }}
+            >
+              {Object.keys(ACOS).map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+            <div className="mt-2 text-sm opacity-80">
+              fyd: <b>{num(aco.fyd, 3)}</b> kN/cm²
+            </div>
+          </div>
+
+          <div className="card p-4">
+            <div className="text-sm opacity-70">Esforços (ELU)</div>
+            <div>Vk = <b>{num(Vk, 3)}</b> kN</div>
+            <div>Mk = <b>{num(Mk_kNm, 3)}</b> kN·m</div>
+            <div>Md = <b>{num(Md_kNcm, 1)}</b> kN·cm</div>
+            <div className="mt-2">Kc = <b>{num(Kc, 3)}</b></div>
+          </div>
+        </section>
+
+        {/* Tabela K */}
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-bold">Tabela K — clique na linha a adotar</h2>
+            <div className="text-sm">
+              Sugerida:{" "}
+              <span className="px-2 py-0.5 rounded-full bg-yellow-200 text-yellow-900">
+                {headerTabelaSugerida}
+              </span>{" "}
+              (Kc ≈ {num(Kc, 3)})
+            </div>
+          </div>
+
+          <div className="overflow-auto rounded-xl border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-[var(--color-card)]">
+                <tr>
+                  <th className="px-2 py-2 text-left">Bx</th>
+                  <th className="px-2 py-2 text-left">{concretoKey} (kc)</th>
+                  <th className="px-2 py-2 text-left">{acoKey} (ks)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {TABELA_K.map((row, i) => {
+                  const isSug = i === kIdxSugerida;
+                  const isSel = i === kIdxEscolhido;
+                  const baseHover = "hover:bg-cyan-50 dark:hover:bg-neutral-800";
+                  const suggCls = "bg-yellow-100 dark:bg-yellow-900/30";
+                  const selCls = "bg-cyan-100 dark:bg-cyan-900/30";
+                  const rowCls = isSel ? selCls : isSug ? suggCls : baseHover;
+
+                  return (
+                    <tr
+                      key={i}
+                      onClick={() => setKIdxEscolhido(i)}
+                      className={`cursor-pointer ${rowCls}`}
+                      title={isSug ? "Linha sugerida pela proximidade do Kc" : ""}
+                    >
+                      <td className="px-2 py-1 border-t">{getBx(row)}</td>
+                      <td className="px-2 py-1 border-t">{getKc(row, concretoKey) ?? "–"}</td>
+                      <td className="px-2 py-1 border-t">{getKs(row, acoKey) ?? "–"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {!linha && (
+            <p className="mt-2 text-sm opacity-80">
+              ➜ Clique na linha <b>amarela</b> (sugerida) para preencher <b>Bx</b> e <b>ks</b>.
+            </p>
+          )}
+        </section>
+
+        {/* Resultado + Arranjos */}
+        {linha && (
+          <>
+            <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+              <div className="card p-4">
+                <div>Bx = <b>{num(Bx!, 3)}</b></div>
+                <div>ks = <b>{ks != null ? num(ks, 3) : "–"}</b></div>
+                <div className="mt-2">x = Bx·d = <b>{num(x!, 3)}</b> cm</div>
+                <div>
+                  Verif. T: x {ehT ? ">" : "≤"} 1,25·hf →{" "}
+                  <b>{ehT ? "T verdadeira" : "retângulo eq."}</b>
+                </div>
+              </div>
+
+              <div className="card p-4">
+                <div className="font-semibold mb-1">Armadura (método ks)</div>
+                <div>As = ks·Md/d = <b>{num(As!, 3)}</b> cm²</div>
+                <div>Desconto treliça (0,40): <b>0,40</b> cm²</div>
+                <div>As (adotar) = <b>{num(AsAdotar!, 3)}</b> cm²</div>
+              </div>
+
+              <div className="card p-4">
+                {/* Ambiente / agregado / posição */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
+                  <label className="text-sm">
+                    Agregado máx. d<sub>agg</sub> (mm)
+                    <select
+                      className="mt-1 w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
+                      value={dAgg_mm}
+                      onChange={(e) => setDAgg(parseInt(e.target.value))}
+                    >
+                      {[19, 25, 32].map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    Posicionamento
+                    <select
+                      className="mt-1 w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
+                      value={pos}
+                      onChange={(e) => setPos(e.target.value as any)}
+                    >
+                      <option value="dentro">Dentro da mesa</option>
+                      <option value="fora">Sobre a mesa (entre diagonais)</option>
+                    </select>
+                  </label>
+                  {pos === "fora" && (
+                    <label className="text-sm">
+                      Cota y (cm) acima da mesa
+                      <input
+                        type="number"
+                        step={0.01}
+                        className="mt-1 w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
+                        value={yFora_cm}
+                        onChange={(e) => setYFora(parseFloat(e.target.value))}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="mt-3 text-sm opacity-80">
+                  <div>
+                    s<sub>min</sub> = max(φ, 2, 1,2·d<sub>agg</sub>) ⇒{" "}
+                    <b>depende da bitola</b> (exibido nas listas).
+                  </div>
+                  <div>
+                    {pos === "dentro" ? (
+                      <>
+                        Largura útil (dentro) = bw − 2·c<sub>inf</sub> − 2·φ<sub>base</sub> ={" "}
+                        <b>
+                          {tre.bw} − 2·1,5 − 2·{(tre.arm?.base_mm ?? 5) / 10} ={" "}
+                          {num(larguraDentro_cm, 2)} cm
+                        </b>
+                      </>
+                    ) : (
+                      <>
+                        Largura entre diagonais à y = <b>{num(yFora_cm, 2)}</b> cm →{" "}
+                        <b>{num(larguraFora_cm, 2)} cm</b>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Listas de sugestões com demonstração CABE/NÃO cabe */}
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="card p-4">
+                <h3 className="font-semibold mb-2">Sugestões (CABEM) — ordem econômica</h3>
+                {cabem.length === 0 ? (
+                  <div className="text-sm opacity-70">Nenhuma combinação atende e cabe nessa posição.</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {cabem.slice(0, 8).map((s, i) => {
+                      const phi_cm = s.diam / 10;
+                      const smin = sminFromPhi(phi_cm);
+                      const label = `${descArranjo(s.n, s.diam)} — área ≈ ${num(
+                        s.area,
+                        2
+                      )} cm², L = ${num(s.L, 2)} cm → CABE`;
+                      const selected = selN === s.n && selDiam === s.diam;
+                      return (
+                        <li key={i}>
+                          <button
+                            onClick={() => selecionar(s)}
+                            className={`w-full text-left px-3 py-2 rounded-lg border ${
+                              selected
+                                ? "bg-cyan-100 dark:bg-cyan-900/30 border-cyan-300"
+                                : "hover:bg-cyan-50 dark:hover:bg-neutral-800"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{descArranjo(s.n, s.diam)}</span>
+                              <span className="text-xs opacity-70">
+                                s<sub>min</sub>=max({num(phi_cm, 2)},{2.0.toFixed(1)},{num(
+                                  (1.2 * dAgg_mm) / 10,
+                                  2
+                                )}) → {num(smin, 2)} cm
+                              </span>
+                            </div>
+                            <div className="text-sm opacity-90">{label}</div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              <div className="card p-4">
+                <h3 className="font-semibold mb-2">Não cabem (mostradas só para referência)</h3>
+                {naoCabem.length === 0 ? (
+                  <div className="text-sm opacity-70">—</div>
+                ) : (
+                  <ul className="space-y-1">
+                    {naoCabem.slice(0, 6).map((s, i) => {
+                      const phi_cm = s.diam / 10;
+                      const smin = sminFromPhi(phi_cm);
+                      const label = `${descArranjo(s.n, s.diam)} — área ≈ ${num(
+                        s.area,
+                        2
+                      )} cm², L = ${num(s.L, 2)} cm → NÃO cabe`;
+                      return (
+                        <li
+                          key={i}
+                          className="px-3 py-2 rounded-lg border bg-neutral-100 dark:bg-neutral-900/30 opacity-70 cursor-not-allowed"
+                          title="Não selecionável nesta posição"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{descArranjo(s.n, s.diam)}</span>
+                            <span className="text-xs">
+                              s<sub>min</sub>=max({num(phi_cm, 2)},{2.0.toFixed(1)},{num(
+                                (1.2 * dAgg_mm) / 10,
+                                2
+                              )}) → {num(smin, 2)} cm
+                            </span>
+                          </div>
+                          <div className="text-sm">{label}</div>
+                        </li>
+                      );
+                    })}
+                    {naoCabem.length > 6 && (
+                      <div className="text-xs opacity-60 mt-1">
+                        … e mais {naoCabem.length - 6} combinações que também não cabem.
+                      </div>
+                    )}
+                  </ul>
+                )}
+              </div>
+            </section>
+
+            {/* Carimbo/Export */}
+            <section className="mt-6">
+              <div ref={arranjoRef} className="card p-4">
+                <div className="font-semibold mb-2">
+                  Arranjo selecionado:{" "}
+                  {selN && selDiam ? (
+                    <>{descArranjo(selN, selDiam)}</>
+                  ) : (
+                    "—"
+                  )}
+                </div>
+
+                <div className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2 opacity-90">
+                  <div>
+                    Posição: <b>{pos === "dentro" ? "dentro da mesa" : "sobre a mesa"}</b>{" "}
+                    {pos === "fora" && (
+                      <>| y = <b>{num(yFora_cm, 2)} cm</b></>
+                    )}
+                  </div>
+                  <div>
+                    Largura disponível:{" "}
+                    <b>
+                      {pos === "dentro"
+                        ? `${num(larguraDentro_cm, 2)} cm`
+                        : `${num(larguraFora_cm, 2)} cm`}
+                    </b>
+                  </div>
+                  <div>
+                    Verificação s<sub>min</sub>: conforme NBR — mostrado nas listas acima.
+                  </div>
+                  <div>
+                    q<sub>total</sub> ({usarPP ? "com" : "sem"} PP LT) ={" "}
+                    <b>{num(qTotal_kN_m2, 3)}</b> kN/m²
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 flex justify-center">
+                <button
+                  onClick={exportPDF}
+                  className="px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white font-semibold shadow hover:bg-opacity-90 transition"
+                >
+                  Exportar PDF (carimbo)
+                </button>
+              </div>
+            </section>
+          </>
+        )}
       </div>
 
-      {/* FOOTER premium institucional */}
-      <footer className="mt-8 pt-4 border-t border-neutral-200 dark:border-neutral-700 text-xs flex flex-wrap items-center justify-between gap-2">
-        <div>
-          CREA/PR 1234567-D | Eng. Joanez Gaspar Pinto Junior | Sistema Premium
-        </div>
-        <div className="flex gap-2 items-center">
-          <span>{now}</span>
-          <span className="text-[8px] bg-cyan-800 text-white px-2 py-1 rounded">QR</span>
-        </div>
-      </footer>
-    </div>
+      <Footer />
+    </main>
   );
 }

@@ -1,81 +1,183 @@
-// src/components/constantes.ts
+// constantes.ts
+// -------------------------------------------------
+// Fonte única de dados do sistema
+// -------------------------------------------------
 
-export const TRELICAS = {
-  "TR08": { bw: 9, bf: 42, h: 8, hf: 4, d: 6.5 },
-  "TR12": { bw: 9, bf: 42, h: 12, hf: 4, d: 10.5 },
-  "TR14": { bw: 9, bf: 42, h: 14, hf: 4, d: 12.5 },
-  "TR16": { bw: 9, bf: 42, h: 16, hf: 4, d: 14.5 },
-  "TR20": { bw: 9, bf: 42, h: 20, hf: 4, d: 18.5 },
-  "TR25": { bw: 9, bf: 42, h: 25, hf: 4, d: 23.5 },
-  "TR30": { bw: 9, bf: 42, h: 30, hf: 4, d: 28.5 },
+// -----------------------------
+// Tipos
+// -----------------------------
+export type Trelica = {
+  bw: number;
+  bf: number;
+  h: number;   // altura total da laje (cm) = h_trelica_cm + cobrimentos (2.5 sup + 1.5 inf)
+  hf: number;  // espessura da capa (cm)
+  d: number;   // altura útil (cm) – mantido conforme app (aprox. h - 1,5)
+  // Novos metadados (opcionais) para detalhamento/ desenho:
+  h_trelica_cm?: number; // altura da treliça (cm)
+  arm?: {
+    top_mm: number;   // diâmetro do banzo superior (mm)
+    diag_mm: number;  // diâmetro das diagonais (mm)
+    base_mm: number;  // diâmetro do banzo inferior (mm)
+  };
 };
 
-export const CONCRETOS = {
-  "C20": 20,
-  "C25": 25,
-  "C30": 30,
-  "C35": 35,
-  "C40": 40,
-  "C45": 45,
-  "C50": 50,
+export type Concreto = {
+  fck: number; // MPa
+  fcd: number; // kN/cm²
 };
 
-export const ACOS = {
-  "CA25": 250,
-  "CA50": 500,
-  "CA60": 600,
+export type Aco = {
+  fyk: number; // MPa
+  fyd: number; // kN/cm²
 };
 
-export const TABELA_ACO = {
-  5.0: [0.20, 0.40, 0.60, 0.80, 1.00, 1.20, 1.40, 1.60, 1.80, 2.00],
-  6.3: [0.315, 0.63, 0.945, 1.26, 1.575, 1.89, 2.205, 2.52, 2.835, 3.15],
-  8.0: [0.50, 1.00, 1.50, 2.00, 2.50, 3.00, 3.50, 4.00, 4.50, 5.00],
-  10.0: [0.80, 1.60, 2.40, 3.20, 4.00, 4.80, 5.60, 6.40, 7.20, 8.00],
-  12.5: [1.25, 2.50, 3.75, 5.00, 6.25, 7.50, 8.75, 10.00, 11.25, 12.50],
-  16.0: [2.00, 4.00, 6.00, 8.00, 10.00, 12.00, 14.00, 16.00, 18.00, 20.00],
-};
-
-export const BITOLAS = [5.0, 6.3, 8.0, 10.0, 12.5, 16.0];
-
-export const CONCRETO_COLS = {
-  "C20": 1,
-  "C25": 2,
-  "C30": 3,
-  "C35": 4,
-  "C40": 5,
-  "C45": 6,
-  "C50": 7,
-};
-
-export const ACO_COLS = {
-  "CA25": 8,
-  "CA50": 9,
-  "CA60": 10,
-};
-
-export const MAX_BARRAS_SAPATA: Record<number, number> = {
-  5.0: 4,
-  6.3: 4,
-  8.0: 2,
-  10.0: 1,
-  12.5: 1,
-  16.0: 1,
-};
-
+// [Kc, C20, C25, C30, C35, C40, C45, C50, ks_CA25, ks_CA50, ks_CA60]
 export type LinhaTabelaK = [
-  number,
-  number,
-  number,
-  number,
-  number,
-  number,
-  number,
-  number,
-  number | null,
-  number | null,
-  number | null
+  number, number, number, number, number, number, number, number,
+  number | null, number | null, number | null
 ];
 
+// -----------------------------
+// Índices da Tabela K (evitar números mágicos)
+// -----------------------------
+export const K_COL_KC = 0;
+export const K_COL_KS = 1;
+export const K_COL_BX = 8;
+
+// -----------------------------
+// Fatores de segurança
+// -----------------------------
+export const GAMMA_C = 1.4;
+export const GAMMA_S = 1.15;
+
+// -----------------------------
+// Cobrimentos padrão (cm) — usados no cálculo de h total (informativo)
+// -----------------------------
+export const C_SUP_PADRAO_CM = 2.5;
+export const C_INF_PADRAO_CM = 1.5;
+
+// -----------------------------
+// Concretos disponíveis
+// -----------------------------
+export const CONCRETOS: Record<string, Concreto> = {
+  C20: { fck: 20, fcd: parseFloat(((20 / GAMMA_C) / 10).toFixed(3)) },
+  C25: { fck: 25, fcd: parseFloat(((25 / GAMMA_C) / 10).toFixed(3)) },
+  C30: { fck: 30, fcd: parseFloat(((30 / GAMMA_C) / 10).toFixed(3)) },
+  C35: { fck: 35, fcd: parseFloat(((35 / GAMMA_C) / 10).toFixed(3)) },
+  C40: { fck: 40, fcd: parseFloat(((40 / GAMMA_C) / 10).toFixed(3)) },
+  C45: { fck: 45, fcd: parseFloat(((45 / GAMMA_C) / 10).toFixed(3)) },
+  C50: { fck: 50, fcd: parseFloat(((50 / GAMMA_C) / 10).toFixed(3)) },
+};
+
+// -----------------------------
+// Aços disponíveis
+// -----------------------------
+export const ACOS: Record<string, Aco> = {
+  CA25: { fyk: 250, fyd: parseFloat(((250 / GAMMA_S) / 10).toFixed(3)) },
+  CA50: { fyk: 500, fyd: parseFloat(((500 / GAMMA_S) / 10).toFixed(3)) },
+  CA60: { fyk: 600, fyd: parseFloat(((600 / GAMMA_S) / 10).toFixed(3)) },
+};
+
+// -----------------------------
+// Treliças (ABNT NBR 14859/14862 + seus critérios)
+// h_total = h_trelica_cm + 2,5 (sup) + 1,5 (inf) = h_trelica_cm + 4
+// d ≈ h - 1,5 (mantém compatibilidade com o app existente)
+// bw/bf fixos conforme sua base (9 / 42)
+// -----------------------------
+export const TRELICAS: Record<string, Trelica> = {
+  TR06644: {
+    bw: 9, bf: 42,
+    h_trelica_cm: 6, h: 10, hf: 4, d: 8.5,
+    arm: { top_mm: 6.0, diag_mm: 4.2, base_mm: 4.2 },
+  },
+  TR08644: {
+    bw: 9, bf: 42,
+    h_trelica_cm: 8, h: 12, hf: 4, d: 10.5,
+    arm: { top_mm: 6.0, diag_mm: 4.2, base_mm: 4.2 },
+  },
+  TR08645: {
+    bw: 9, bf: 42,
+    h_trelica_cm: 8, h: 12, hf: 4, d: 10.5,
+    arm: { top_mm: 6.0, diag_mm: 4.2, base_mm: 5.0 },
+  },
+  TR12645: {
+    bw: 9, bf: 42,
+    h_trelica_cm: 12, h: 16, hf: 4, d: 14.5,
+    arm: { top_mm: 6.0, diag_mm: 4.2, base_mm: 5.0 },
+  },
+  TR12646: {
+    bw: 9, bf: 42,
+    h_trelica_cm: 12, h: 16, hf: 4, d: 14.5,
+    arm: { top_mm: 6.0, diag_mm: 4.2, base_mm: 6.0 },
+  },
+  TR16745: {
+    bw: 9, bf: 42,
+    h_trelica_cm: 16, h: 20, hf: 4, d: 18.5,
+    arm: { top_mm: 7.0, diag_mm: 4.2, base_mm: 5.0 },
+  },
+  TR16746: {
+    bw: 9, bf: 42,
+    h_trelica_cm: 16, h: 20, hf: 4, d: 18.5,
+    arm: { top_mm: 7.0, diag_mm: 4.2, base_mm: 6.0 },
+  },
+  TR20745: {
+    bw: 9, bf: 42,
+    h_trelica_cm: 20, h: 24, hf: 4, d: 22.5,
+    arm: { top_mm: 7.0, diag_mm: 4.2, base_mm: 5.0 },
+  },
+  TR20756: {
+    bw: 9, bf: 42,
+    h_trelica_cm: 20, h: 24, hf: 4, d: 22.5,
+    arm: { top_mm: 7.0, diag_mm: 5.0, base_mm: 6.0 },
+  },
+  TR25856: {
+    bw: 9, bf: 42,
+    h_trelica_cm: 25, h: 29, hf: 5, d: 27.5,
+    arm: { top_mm: 8.0, diag_mm: 5.0, base_mm: 6.0 },
+  },
+  TR25857: {
+    bw: 9, bf: 42,
+    h_trelica_cm: 25, h: 29, hf: 5, d: 27.5,
+    arm: { top_mm: 8.0, diag_mm: 5.0, base_mm: 7.0 },
+  },
+};
+
+// -----------------------------
+// Helpers para gerar tabelas
+// -----------------------------
+export const gerarTabelaAco = (diametros: number[], maxBarras = 10) => {
+  const tabela: Record<number, number[]> = {};
+  diametros.forEach(diam => {
+    const area = parseFloat(((Math.PI * (diam / 10) ** 2) / 4).toFixed(3)); // cm²
+    tabela[diam] = Array.from({ length: maxBarras }, (_, i) =>
+      parseFloat(((i + 1) * area).toFixed(3))
+    );
+  });
+  return tabela;
+};
+
+export const gerarBitolas = (diametros: number[]) => {
+  return diametros.map(diam => ({
+    diam,
+    area: parseFloat(((Math.PI * (diam / 10) ** 2) / 4).toFixed(3)) // cm²
+  }));
+};
+
+// -----------------------------
+// Bitolas e Tabela de aço
+// -----------------------------
+export const DIAMETROS_PADRAO = [5, 6.3, 8, 10, 12.5, 16, 20, 25, 32] as const;
+
+export const BITOLAS = gerarBitolas([...DIAMETROS_PADRAO]);
+export const AREA_BY_DIAM: Record<number, number> = Object.fromEntries(
+  BITOLAS.map(b => [b.diam, b.area])
+) as Record<number, number>;
+
+export const TABELA_ACO = gerarTabelaAco([...DIAMETROS_PADRAO]);
+
+// -----------------------------
+// Tabela K (mantida conforme norma) – NÃO ALTERAR
+// -----------------------------
 export const TABELA_K: LinhaTabelaK[] = [
   [0.02, 51.9, 41.5, 34.6, 29.6, 25.9, 23.1, 20.8, 0.046, 0.023, 0.019],
   [0.04, 26.2, 20.9, 17.4, 14.9, 13.1, 11.6, 10.5, 0.047, 0.023, 0.019],
@@ -117,3 +219,19 @@ export const TABELA_K: LinhaTabelaK[] = [
   [0.76, 2.0, 1.6, 1.3, 1.1, 1.0, 0.9, 0.8, 0.066, null, null],
   [0.772, 1.9, 1.5, 1.3, 1.1, 1.0, 0.9, 0.8, 0.067, null, null],
 ];
+
+// -----------------------------
+// Utilitário opcional: achar índice da linha K mais próxima por Kc
+// -----------------------------
+export const findClosestIdxByKc = (kc: number): number => {
+  let closest = 0;
+  let minDiff = Math.abs(TABELA_K[0][K_COL_KC] - kc);
+  for (let i = 1; i < TABELA_K.length; i++) {
+    const diff = Math.abs(TABELA_K[i][K_COL_KC] - kc);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = i;
+    }
+  }
+  return closest;
+};

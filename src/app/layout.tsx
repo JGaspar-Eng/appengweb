@@ -1,7 +1,7 @@
 // src/app/layout.tsx
 import "./globals.css";
-import { ThemeProvider } from "../components/ThemeProvider";
-import { AuthProvider } from "../components/AuthProvider";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { AuthProvider } from "@/components/AuthProvider";
 
 export const metadata = {
   title: "Dashboard do Engenheiro",
@@ -14,7 +14,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ThemeProvider>
           <AuthProvider>
-            {/* Conteúdo principal */}
             {children}
           </AuthProvider>
         </ThemeProvider>

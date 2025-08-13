@@ -2,29 +2,14 @@
 
 import Link from "next/link";
 import { Calculator, Building2 } from "lucide-react";
-import ThemeSwitcher from "@/app/components/ThemeSwitcher";
 import Footer from "@/app/components/Footer";
+import InternalHeader from "@/app/components/InternalHeader";
 
 export default function DashboardPage() {
   return (
     <main className="min-h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-text)] transition-colors relative">
-      <header className="sticky top-0 z-50 flex items-center justify-between px-8 py-5 bg-[var(--color-card)] dark:bg-[var(--color-card)] shadow-lg shadow-cyan-900/20 mb-12 rounded-b-3xl border border-cyan-200 dark:border-cyan-900">
-        {/* Botão Voltar para Home no canto esquerdo */}
-        <Link
-          href="/"
-          className="px-4 py-1 rounded-full bg-cyan-50 dark:bg-neutral-800 border border-cyan-200 dark:border-cyan-800 font-semibold text-cyan-800 dark:text-cyan-100 hover:bg-cyan-100 hover:underline transition"
-        >
-          ← Voltar ao Início
-        </Link>
-
-        {/* Título centralizado */}
-        <h1 className="text-2xl font-extrabold tracking-tight text-cyan-900 dark:text-cyan-100">
-          AppEngWeb
-        </h1>
-
-        {/* ThemeSwitcher no canto direito */}
-        <ThemeSwitcher />
-      </header>
+      {/* Passando showBackButton={false} para esconder o botão */}
+      <InternalHeader title="AppEngWeb" showBackButton={false} />
 
       <section className="w-full max-w-4xl mx-auto flex flex-col gap-10 pt-6 pb-16">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
