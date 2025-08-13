@@ -1,8 +1,10 @@
+"use client";
+
 import React, { useState } from "react";
-import { TABELA_K, LinhaTabelaK } from "./constantes";
+import { TABELA_K } from "./constantes";
 
 interface TabelaKProps {
-  kcArr: number[];
+  kcArr: number[]; // ex.: [Kc+ , Kc- , Kc+]
   onSelecionar: (idxMomento: number, ks: number, bx: number) => void;
   dadosSelecionados: { ks?: number; bx?: number }[];
 }
@@ -11,7 +13,7 @@ function findClosestIdx(kc: number): number {
   let closest = 0;
   let minDiff = Math.abs(TABELA_K[0][0] - kc);
   for (let i = 1; i < TABELA_K.length; i++) {
-    let diff = Math.abs(TABELA_K[i][0] - kc);
+    const diff = Math.abs(TABELA_K[i][0] - kc); // compara com coluna Kc (0)
     if (diff < minDiff) {
       minDiff = diff;
       closest = i;
@@ -30,8 +32,8 @@ const TabelaK: React.FC<TabelaKProps> = ({ kcArr, onSelecionar, dadosSelecionado
       return novo;
     });
     const linha = TABELA_K[idxLinha];
-    const ks = linha[1];
-    const bx = linha[8] ?? 0;
+    const ks = linha[1];        // ks
+    const bx = linha[8] ?? 0;   // bx
     onSelecionar(idxMomento, ks, bx);
   }
 
@@ -42,7 +44,9 @@ const TabelaK: React.FC<TabelaKProps> = ({ kcArr, onSelecionar, dadosSelecionado
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         {kcArr.map((kc, idxMomento) => {
-          const idxSugestao = findClosestIdx(Number(kc));
+          const kcNum = Number(kc);
+          const idxSugestao = Number.isFinite(kcNum) ? findClosestIdx(kcNum) : 0;
+
           return (
             <div key={idxMomento} className="rounded-xl shadow border bg-white dark:bg-neutral-900 p-2">
               <div className="mb-1 text-xs">
@@ -70,10 +74,8 @@ const TabelaK: React.FC<TabelaKProps> = ({ kcArr, onSelecionar, dadosSelecionado
                               ? "bg-cyan-100 dark:bg-cyan-900 font-bold ring-2 ring-cyan-600"
                               : isSugestao
                               ? "bg-yellow-50 dark:bg-yellow-900/30"
-                              : "") +
-                            " transition-all duration-150"
+                              : "") + " transition-all duration-150 cursor-pointer"
                           }
-                          style={{ cursor: "pointer" }}
                           onClick={() => handleClick(idxMomento, idxLinha)}
                         >
                           <td className="border px-2 py-1 font-mono">{linha[0]}</td>

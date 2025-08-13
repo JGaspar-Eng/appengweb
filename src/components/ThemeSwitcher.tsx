@@ -14,7 +14,10 @@ export default function ThemeSwitcher() {
 
   return (
     <button
-      className="p-2 rounded-xl bg-neutral-200 dark:bg-neutral-800 transition hover:bg-neutral-300 dark:hover:bg-neutral-700"
+      className="p-2 rounded-xl bg-neutral-200 dark:bg-neutral-800 transition 
+      hover:bg-neutral-300 dark:hover:bg-neutral-700
+      opacity-0 animate-fadeIn"
+      style={{ animationDelay: "0.45s" }}
       title="Trocar tema"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
     >

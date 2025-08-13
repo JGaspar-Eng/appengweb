@@ -128,68 +128,83 @@ Aprenda Next.js (tutorial interativo)
 
 Repositório Next.js no GitHub
 
-🗂️ Estrutura do Projeto
+🗂️ appengweb/
 
-appengweb/
+🟩 Pode editar — arquivos/pastas que você vai alterar no dia a dia (código, estilos, imagens, configs personalizadas).
+
+🟥 Não deve editar — arquivos/pastas gerados automaticamente ou críticos do sistema, que podem quebrar o projeto se alterados sem necessidade.
+
 │
-├── .next/                      # Build do Next.js (gerada automaticamente)
-├── node_modules/               # Dependências (gerado pelo npm)
-├── public/                     # Arquivos públicos (favicon, imagens, fontes, etc.)
-│   ├── fonts/                  # Fontes personalizadas (Montserrat, Abel)
-│   ├── logo-simettria-clean.svg
-│   ├── logo-simettria-dark.svg
-│   └── ...                    # Outros arquivos estáticos
-├── src/                        # Código fonte principal
-│   ├── app/
-│   │   ├── calculadoras/
-│   │   │   └── page.tsx        # Página das calculadoras estruturais
-│   │   ├── components/
-│   │   │   ├── DashboardCard.tsx
-│   │   │   ├── Footer.tsx
-│   │   │   ├── Header.tsx
-│   │   │   ├── Sidebar.tsx
-│   │   │   └── ThemeSwitcher.tsx
-│   │   ├── dashboard/
-│   │   │   └── page.tsx        # Dashboard premium (cards principais)
-│   │   ├── lajes/
-│   │   │   ├── balanco/        # Em desenvolvimento
-│   │   │   ├── biapoiada/
-│   │   │   │   └── page.tsx    # Página da laje biapoiada
-│   │   │   └── continua/
-│   │   │       └── page.tsx    # Página da laje contínua
-│   │   ├── login/
-│   │   │   └── page.tsx        # Página de login premium
-│   │   ├── logout/
-│   │   │   └── page.tsx        # Logout (limpa sessão)
-│   │   ├── restricted/
-│   │   │   └── page.tsx        # Página restrita para testes
-│   │   ├── favicon.ico
-│   │   ├── globals.css         # Estilos globais (Tailwind, variáveis CSS)
-│   │   ├── layout.tsx          # Layout base do app com providers
-│   │   └── page.tsx            # Página inicial (boas vindas)
-│   ├── components/             # Componentes reutilizáveis globais
-│   │   ├── ArmaduraSugerida.tsx
-│   │   ├── CargaLinearAlvenaria.tsx
-│   │   ├── TabelaK.tsx
-│   │   ├── AuthProvider.tsx
-│   │   └── ThemeSwitcher.tsx
-│   ├── context/                # Contextos globais (ex.: Theme)
-│   │   └── ThemeContext.tsx
-│   └── utils/                  # Utilitários do sistema
-│       ├── pdfGenerator.ts
-│       └── persistencia.ts
-├── .gitignore
-├── appengweb.ps1
-├── eslint.config.mjs
-├── middleware.ts
-├── next.config.js
-├── next-env.d.ts
-├── package.json
-├── package-lock.json
-├── postcss.config.js
-├── README.md
-├── tailwind.config.js
-└── tsconfig.json
+🟥 ├── .next/                          # Build do Next.js (gerada automaticamente)
+🟥 ├── node_modules/                   # Dependências (gerado pelo npm)
+🟩 ├── public/                         # Arquivos públicos (favicon, imagens, fontes, etc.)
+│   🟩 ├── fonts/                      # Fontes personalizadas
+│   │   🟩 ├── Abel-Regular.ttf
+│   │   🟩 └── Montserrat-VariableFont_wght.ttf
+│   🟩 ├── file.svg
+│   🟩 ├── globe.svg
+│   🟩 ├── logo-simettria-clean.svg
+🟩   ├── logo-simettria-dark.svg
+🟩   ├── next.svg
+🟩   ├── vercel.svg
+🟩   └── window.svg
+│
+🟩 ├── src/                            # Código fonte principal
+│   🟩 ├── app/
+│   │   🟩 ├── calculadoras/
+│   │   │   🟩 └── page.tsx            # Página das calculadoras estruturais
+│   │   🟩 ├── components/             # Componentes específicos das páginas de app
+│   │   │   🟩 ├── DashboardCard.tsx
+│   │   │   🟩 ├── Footer.tsx
+│   │   │   🟩 ├── Header.tsx
+│   │   │   🟩 ├── Sidebar.tsx
+│   │   │   🟩 └── ThemeSwitcher.tsx
+│   │   🟩 ├── dashboard/
+│   │   │   🟩 └── page.tsx             # Dashboard premium
+│   │   🟩 ├── lajes/
+│   │   │   🟩 ├── balanco/             # Em desenvolvimento (vazia)
+│   │   │   🟩 ├── biapoiada/
+│   │   │   │   🟩 └── page.tsx         # Página da laje biapoiada
+│   │   │   🟩 └── continua/
+│   │   │       🟩 └── page.tsx         # Página da laje contínua
+│   │   🟩 ├── logout/
+│   │   │   🟩 └── page.tsx             # Logout (limpa sessão)
+│   │   🟩 ├── restricted/
+│   │   │   🟩 └── page.tsx             # Página restrita
+│   │   🟩 ├── favicon.ico
+│   │   🟩 ├── globals.css              # Estilos globais
+│   │   🟩 ├── layout.tsx               # Layout base do app
+│   │   🟩 └── page.tsx                 # Página inicial
+│   │
+│   🟩 ├── components/                  # Componentes reutilizáveis globais
+│   │   🟩 ├── ArmaduraSugerida.tsx
+│   │   🟩 ├── CargaLinearAlvenaria.tsx
+│   │   🟩 ├── TabelaK.tsx
+│   │   🟩 ├── AuthProvider.tsx
+│   │   🟩 └── ThemeSwitcher.tsx
+│   │
+│   🟩 ├── context/                     # Contextos globais
+│   │   🟩 └── ThemeContext.tsx
+│   │
+│   🟩 └── utils/                        # Utilitários do sistema
+│       🟩 ├── pdfGenerator.ts
+│       🟩 └── persistencia.ts
+│
+🟩 ├── .gitignore                       # Lista arquivos ignorados pelo Git
+🟩 ├── appengweb.ps1                    # Script PowerShell personalizado
+🟩 ├── eslint.config.mjs                 # Configuração de lint
+🟩 ├── middleware.ts                    # Middleware do Next.js
+🟥 ├── next-env.d.ts                     # Gerado automaticamente pelo Next.js
+🟩 ├── next.config.js                    # Configuração do Next.js
+🟩 ├── package.json                      # Dependências e scripts do projeto
+🟥 ├── package-lock.json                  # Controle de versão exata das libs
+🟩 ├── postcss.config.js                  # Configuração do PostCSS
+🟩 ├── README.md                         # Documentação do projeto
+🟩 ├── script-limpar-cache-appengweb.ps1 # Script PowerShell para limpar cache
+🟩 ├── tailwind.config.js                # Configuração do TailwindCSS
+🟩 └── tsconfig.json                     # Configuração do TypeScript
+
+
 
 Novos arquivos devem seguir essa organização. Não altere a estrutura, apenas expanda conforme o padrão acima.
 
@@ -205,4 +220,4 @@ Desenvolvido por Eng. Joanez Gaspar – CREA 1234567 D
   <img alt="Engenheiro Joanez Gaspar" src="https://img.shields.io/badge/👷%20Eng.%20Joanez%20Gaspar-1234567%20D%20CREA-38bdf8?style=for-the-badge&color=0369a1&labelColor=27272a">
 </p>
 
-versão 1
+versão 4

@@ -1,8 +1,18 @@
+// src/components/ArmaduraSugerida.tsx
 import React from "react";
+import { BITOLAS } from "./constantes";
+
+interface TrelicaProps {
+  bw: number;
+  bf: number;
+  h: number;
+  hf: number;
+  d: number;
+}
 
 interface ArmaduraSugeridaProps {
   resultados: {
-    t: any;
+    t: TrelicaProps;
     c?: any;
     a?: any;
     fcd: number;
@@ -17,24 +27,23 @@ interface ArmaduraSugeridaProps {
   fyd?: number | string;
 }
 
-const BITOLAS = [
-  { diam: 6.3, area: 0.312 },
-  { diam: 8.0, area: 0.503 },
-  { diam: 10.0, area: 0.785 },
-  { diam: 12.5, area: 1.227 },
-  { diam: 16.0, area: 2.010 }
-];
-
-function sugerirBitolas(As: number): { diam: number, n: number, areaTotal: number }[] {
-  const sugestoes: { diam: number, n: number, areaTotal: number }[] = [];
+// Função para sugerir bitolas com base na área de aço necessária
+function sugerirBitolas(As: number) {
+  const sugestoes: { diam: number; n: number; areaTotal: number }[] = [];
   for (const bitola of BITOLAS) {
     let n = Math.ceil(As / bitola.area);
     let areaTotal = n * bitola.area;
     if (n > 0 && areaTotal >= As) {
-      sugestoes.push({ diam: bitola.diam, n, areaTotal: +areaTotal.toFixed(3) });
+      sugestoes.push({
+        diam: bitola.diam,
+        n,
+        areaTotal: +areaTotal.toFixed(3),
+      });
     }
   }
-  return sugestoes.sort((a, b) => (a.areaTotal - b.areaTotal) || (a.n - b.n)).slice(0, 3);
+  return sugestoes
+    .sort((a, b) => a.areaTotal - b.areaTotal || a.n - b.n)
+    .slice(0, 3);
 }
 
 const ArmaduraSugerida: React.FC<ArmaduraSugeridaProps> = ({
@@ -43,26 +52,29 @@ const ArmaduraSugerida: React.FC<ArmaduraSugeridaProps> = ({
   hf,
   d,
   fcd,
-  fyd
+  fyd,
 }) => {
   if (!resultados) return null;
 
   function calcularAs(idx: number): number {
+    if (!resultados.md || resultados.md[idx] === undefined) return 0;
     const ks = dadosTabelaK[idx]?.ks ?? 0;
-    const md = resultados.md[idx];
-    const d_ = resultados.t.d ?? d ?? 0;
+    const md = resultados.md[idx] ?? 0;
+    const d_ = resultados.t?.d ?? d ?? 0;
     const fyd_ = resultados.fyd ?? fyd ?? 0;
     if (!ks || !md || !d_ || !fyd_) return 0;
     return +(ks * md / (d_ * fyd_)).toFixed(3);
   }
+
   function calcularX(idx: number): number {
     const bx = dadosTabelaK[idx]?.bx ?? 0;
-    const d_ = resultados.t.d ?? d ?? 0;
+    const d_ = resultados.t?.d ?? d ?? 0;
     return +(bx * d_).toFixed(2);
   }
+
   function ehSecaoT(idx: number): boolean {
     const x = calcularX(idx);
-    const hf_ = resultados.t.hf ?? hf ?? 0;
+    const hf_ = resultados.t?.hf ?? hf ?? 0;
     return x > 1.25 * hf_;
   }
 
@@ -73,20 +85,36 @@ const ArmaduraSugerida: React.FC<ArmaduraSugeridaProps> = ({
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         {[0, 1, 2].map((idx) => {
+          if (resultados.md[idx] === undefined) return null;
+
           const As = calcularAs(idx);
           const x = calcularX(idx);
           const secaoT = ehSecaoT(idx);
           const sugestoes = sugerirBitolas(As);
 
           return (
-            <div key={idx} className="bg-white dark:bg-neutral-900 rounded-xl shadow p-3">
+            <div
+              key={idx}
+              className="bg-white dark:bg-neutral-900 rounded-xl shadow p-3"
+            >
               <div className="mb-1 text-xs font-semibold text-cyan-800 dark:text-cyan-200">
                 <b>Momento {idx + 1}</b>
               </div>
               <div className="text-xs">
-                <b>Área de aço (As):</b> <span className="font-mono">{As} cm²/m</span><br />
-                <b>Linha neutra (x):</b> <span className="font-mono">{x} cm</span><br />
-                <b>Seção T:</b> <span className={secaoT ? "text-green-700 font-bold" : "text-red-700 font-bold"}>
+                <b>Área de aço (As):</b>{" "}
+                <span className="font-mono">{As} cm²/m</span>
+                <br />
+                <b>Linha neutra (x):</b>{" "}
+                <span className="font-mono">{x} cm</span>
+                <br />
+                <b>Seção T:</b>{" "}
+                <span
+                  className={
+                    secaoT
+                      ? "text-green-700 font-bold"
+                      : "text-red-700 font-bold"
+                  }
+                >
                   {secaoT ? "Verdadeiro" : "Falso"}
                 </span>
               </div>
@@ -95,8 +123,8 @@ const ArmaduraSugerida: React.FC<ArmaduraSugeridaProps> = ({
                 <ul className="list-disc ml-5 text-xs">
                   {sugestoes.map((s, i) => (
                     <li key={i}>
-                      {s.n} barras ⌀{s.diam} mm &rarr; <b>{s.areaTotal} cm²</b>
-                      {s.areaTotal - As < 0.05 ? " (ótima)" : ""}
+                      {s.n} barras ⌀{s.diam} mm → <b>{s.areaTotal} cm²</b>
+                      {Math.abs(s.areaTotal - As) < 0.05 ? " (ótima)" : ""}
                     </li>
                   ))}
                 </ul>
@@ -109,7 +137,7 @@ const ArmaduraSugerida: React.FC<ArmaduraSugeridaProps> = ({
                       className="rounded-full bg-cyan-600"
                       style={{
                         width: Math.max(12, sugestoes[0].diam),
-                        height: Math.max(12, sugestoes[0].diam)
+                        height: Math.max(12, sugestoes[0].diam),
                       }}
                       title={`Barra ⌀${sugestoes[0].diam} mm`}
                     />
