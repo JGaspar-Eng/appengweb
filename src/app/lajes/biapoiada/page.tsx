@@ -1,10 +1,13 @@
 // src/app/lajes/biapoiada/page.tsx
+
+// ======================================================================
+// [SECTION] Imports
+// ======================================================================
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import InternalHeader from "@/app/components/InternalHeader";
 import Footer from "@/app/components/Footer";
-import SlabSketch from "@/components/SlabSketch";
 import {
   TRELICAS,
   CONCRETOS,
@@ -15,9 +18,9 @@ import {
   findClosestIdxByKc,
 } from "@/components/constantes";
 
-// ------------------------------------------------------------------
-// Utils
-// ------------------------------------------------------------------
+// ======================================================================
+// [SECTION] Utilitários (Funções auxiliares, tipos, helpers)
+// ======================================================================
 const num = (v?: number, d = 3) =>
   Number.isFinite(v as number) ? (v as number).toFixed(d) : "–";
 
@@ -70,14 +73,6 @@ const larguraUtilDentro = (
   phi_base_cm: number
 ) => tre.bw - 2 * c_inf_cm - 2 * phi_base_cm;
 
-// largura “fora” a uma cota y acima da mesa (entre diagonais – aproximação linear)
-const larguraEntreDiagonais = (tre: TreExt, y_cm: number) => {
-  const htri = tre.h_trelica_cm ?? tre.h - 4; // fallback
-  const bw = tre.bw;
-  const fator = Math.max(0, 1 - y_cm / Math.max(0.01, htri));
-  return bw * fator;
-};
-
 // área geométrica de uma bitola (cm²)
 const areaBitola = (diam_mm: number) =>
   (Math.PI * (diam_mm / 10) ** 2) / 4.0;
@@ -94,10 +89,16 @@ type Sugestao = {
   L: number; // cm
 };
 
-// ------------------------------------------------------------------
-// Componente
-// ------------------------------------------------------------------
+// valor fixo de agregado (menu removido — usamos este valor)
+const D_AGG_DEFAULT = 19;
+
+// ======================================================================
+// [SECTION] Componente principal (LajeBiapoiadaPage)
+// ======================================================================
 export default function LajeBiapoiadaPage() {
+  // ------------------------------------------------------------------
+  // [SUB-SECTION] Estados do componente (useState)
+  // ------------------------------------------------------------------
   // escolhas padrão
   const [trelicaKey, setTrelicaKey] =
     useState<KeyOf<typeof TRELICAS>>("TR12645");
@@ -114,12 +115,7 @@ export default function LajeBiapoiadaPage() {
   const [qBase, setQBase] = useState(5); // kN/m² (editável)
   const [usarPP, setUsarPP] = useState(true);
 
-  // agregado máximo e s_min (norma)
-  const [dAgg_mm, setDAgg] = useState(19); // 19/25 etc.
-
-  // posição das barras adicionais: dentro da mesa | fora (sobre a mesa)
-  const [pos, setPos] = useState<"dentro" | "fora">("dentro");
-  const [yFora_cm, setYFora] = useState(0.43); // 4,3 mm padrão
+  // **REMOVIDO**: menu de agregados (usamos D_AGG_DEFAULT)
 
   // linha da tabela K
   const [kIdxEscolhido, setKIdxEscolhido] = useState<number | null>(null);
@@ -131,6 +127,9 @@ export default function LajeBiapoiadaPage() {
   // PDF
   const arranjoRef = useRef<HTMLDivElement>(null);
 
+  // ------------------------------------------------------------------
+  // [SUB-SECTION] Cálculos e efeitos
+  // ------------------------------------------------------------------
   // quando Lx/Ly mudam, define L = menor
   useEffect(() => setL(Math.min(Lx, Ly)), [Lx, Ly]);
 
@@ -182,14 +181,13 @@ export default function LajeBiapoiadaPage() {
     As != null ? Math.max(As - 0.4 /*cm²*/, 0) : undefined;
 
   // ------------------- Normativa: s_min -------------------
-  // s_min = max(phi, 2, 1,2 * dAgg)
+  // s_min = max(phi, 2, 1,2 * dAgg) — usa valor fixo D_AGG_DEFAULT
   const sminFromPhi = (phi_cm: number) =>
-    Math.max(phi_cm, 2.0, (1.2 * dAgg_mm) / 10); // cm
+    Math.max(phi_cm, 2.0, (1.2 * D_AGG_DEFAULT) / 10); // cm
 
-  // larguras disponíveis
+  // larguras disponíveis (apenas "dentro")
   const phiBase_cm = (tre.arm?.base_mm ?? 5) / 10;
   const larguraDentro_cm = larguraUtilDentro(tre, 1.5, phiBase_cm); // c_inf = 1,5 cm
-  const larguraFora_cm = larguraEntreDiagonais(tre, yFora_cm);
 
   // gera candidatas de arranjos com base nos diâmetros padrão e 1..10 barras
   const candidatas: { n: number; diam: number; area: number }[] = useMemo(() => {
@@ -203,14 +201,15 @@ export default function LajeBiapoiadaPage() {
     return out;
   }, []);
 
-  // classifica candidatas para “pos” e “AsAdotar”
+  // classifica candidatas para “dentro” e “AsAdotar”
   const { cabem, naoCabem } = useMemo(() => {
     const resultCabem: Sugestao[] = [];
     const resultNao: Sugestao[] = [];
 
     if (AsAdotar == null) return { cabem: resultCabem, naoCabem: resultNao };
 
-    const largura = pos === "dentro" ? larguraDentro_cm : larguraFora_cm;
+    // sempre usar largura dentro
+    const largura = larguraDentro_cm;
 
     for (const c of candidatas) {
       if (c.area < AsAdotar - 1e-9) continue; // só ≥ AsNec
@@ -232,9 +231,9 @@ export default function LajeBiapoiadaPage() {
     resultCabem.sort((a, b) => a.sobra - b.sobra || a.area - b.area);
     resultNao.sort((a, b) => a.sobra - b.sobra || a.area - b.area);
     return { cabem: resultCabem, naoCabem: resultNao };
-  }, [AsAdotar, pos, larguraDentro_cm, larguraFora_cm, candidatas, dAgg_mm]);
+  }, [AsAdotar, larguraDentro_cm, candidatas]);
 
-  // garantir que seleção inválida “caia” fora se trocar posição
+  // garantir que seleção inválida “caia” fora se arranjo deixar de caber
   useEffect(() => {
     if (!selN || !selDiam) return;
     const found = cabem.find((s) => s.n === selN && s.diam === selDiam);
@@ -242,7 +241,7 @@ export default function LajeBiapoiadaPage() {
       setSelN(null);
       setSelDiam(null);
     }
-  }, [pos, cabem, selN, selDiam]);
+  }, [cabem, selN, selDiam]);
 
   // helpers de click
   const selecionar = (s: Sugestao) => {
@@ -268,12 +267,31 @@ export default function LajeBiapoiadaPage() {
   };
 
   // seleção sugerida de tabela K (amarelo) / escolhida (ciano)
-  const kIdxSugerida = kIdxSugerido;
+  // Encontrar índice sugerido de acordo com o concreto selecionado e o Kc calculado
+  const colIndexKC = COL_CONCRETO[concretoKey];
+  let kIdxSugerida: number | null = null;
+  let menorDif = Infinity;
+
+  TABELA_K.forEach((row, idx) => {
+    const valorKC = parseFloat(String(row[colIndexKC]));
+    if (!isNaN(valorKC)) {
+      const dif = Math.abs(valorKC - Kc);
+      if (dif < menorDif) {
+        menorDif = dif;
+        kIdxSugerida = idx;
+      }
+    }
+  });
 
   // seleção de qual linha mostrar como “sugerida” na UI
   const headerTabelaSugerida =
-    kIdxSugerida >= 0 ? `linha ${kIdxSugerida + 1}` : "—";
+    kIdxSugerida != null && kIdxSugerida >= 0
+      ? `linha ${kIdxSugerida + 1}`
+      : "—";
 
+  // ====================================================================
+  // [SECTION] Renderização (JSX)
+  // ====================================================================
   return (
     <main className="min-h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-text)]">
       <InternalHeader
@@ -283,7 +301,9 @@ export default function LajeBiapoiadaPage() {
       />
 
       <div className="container mx-auto px-4 py-6 max-w-6xl">
-        {/* Geometria e carga */}
+        {/* ---------------------------------------------------------------- */}
+        {/* [SECTION] Geometria e carga */}
+        {/* ---------------------------------------------------------------- */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <div className="card p-4">
             <h2 className="font-bold mb-3">Geometria da laje (Lx × Ly)</h2>
@@ -310,7 +330,7 @@ export default function LajeBiapoiadaPage() {
               </label>
             </div>
             <div className="mt-3 flex justify-center">
-              <SlabSketch Lx={Lx} Ly={Ly} menor={menorVao} />
+              (Visualização da laje desativada)
             </div>
             <div className="mt-2 text-sm">
               Menor vão adotado: <b>{num(L, 2)} m</b> ({menorVao ?? "—"})
@@ -371,7 +391,9 @@ export default function LajeBiapoiadaPage() {
           </div>
         </section>
 
-        {/* Materiais / Treliça */}
+        {/* ---------------------------------------------------------------- */}
+        {/* [SECTION] Materiais / Treliça, Concreto e Aço */}
+        {/* ---------------------------------------------------------------- */}
         <section className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <div className="md:col-span-2">
             <label className="block mb-1 font-semibold">Treliça</label>
@@ -387,7 +409,6 @@ export default function LajeBiapoiadaPage() {
             >
               {Object.entries(TRELICAS).map(([k, v]) => (
                 <option key={k} value={k}>
-                  {/* mostra o nome legível se existir, senão a chave */}
                   {(v as any).displayName ?? k}
                 </option>
               ))}
@@ -461,7 +482,9 @@ export default function LajeBiapoiadaPage() {
           </div>
         </section>
 
-        {/* Tabela K */}
+        {/* ---------------------------------------------------------------- */}
+        {/* [SECTION] Tabela K */}
+        {/* ---------------------------------------------------------------- */}
         <section className="mb-8">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold">Tabela K — clique na linha a adotar</h2>
@@ -516,7 +539,9 @@ export default function LajeBiapoiadaPage() {
           )}
         </section>
 
-        {/* Resultado + Arranjos */}
+        {/* ---------------------------------------------------------------- */}
+        {/* [SECTION] Resultado + Arranjos de Armadura */}
+        {/* ---------------------------------------------------------------- */}
         {linha && (
           <>
             <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
@@ -538,73 +563,31 @@ export default function LajeBiapoiadaPage() {
               </div>
 
               <div className="card p-4">
-                {/* Ambiente / agregado / posição */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
-                  <label className="text-sm">
-                    Agregado máx. d<sub>agg</sub> (mm)
-                    <select
-                      className="mt-1 w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
-                      value={dAgg_mm}
-                      onChange={(e) => setDAgg(parseInt(e.target.value))}
-                    >
-                      {[19, 25, 32].map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-sm">
-                    Posicionamento
-                    <select
-                      className="mt-1 w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
-                      value={pos}
-                      onChange={(e) => setPos(e.target.value as any)}
-                    >
-                      <option value="dentro">Dentro da mesa</option>
-                      <option value="fora">Sobre a mesa (entre diagonais)</option>
-                    </select>
-                  </label>
-                  {pos === "fora" && (
-                    <label className="text-sm">
-                      Cota y (cm) acima da mesa
-                      <input
-                        type="number"
-                        step={0.01}
-                        className="mt-1 w-full border rounded-lg px-3 py-2 bg-[var(--color-card)]"
-                        value={yFora_cm}
-                        onChange={(e) => setYFora(parseFloat(e.target.value))}
-                      />
-                    </label>
-                  )}
-                </div>
-
-                <div className="mt-3 text-sm opacity-80">
-                  <div>
-                    s<sub>min</sub> = max(φ, 2, 1,2·d<sub>agg</sub>) ⇒{" "}
-                    <b>depende da bitola</b> (exibido nas listas).
-                  </div>
-                  <div>
-                    {pos === "dentro" ? (
-                      <>
-                        Largura útil (dentro) = bw − 2·c<sub>inf</sub> − 2·φ<sub>base</sub> ={" "}
-                        <b>
-                          {tre.bw} − 2·1,5 − 2·{(tre.arm?.base_mm ?? 5) / 10} ={" "}
-                          {num(larguraDentro_cm, 2)} cm
-                        </b>
-                      </>
-                    ) : (
-                      <>
-                        Largura entre diagonais à y = <b>{num(yFora_cm, 2)}</b> cm →{" "}
-                        <b>{num(larguraFora_cm, 2)} cm</b>
-                      </>
-                    )}
+                {/* Ambiente / posição (agregado removido) */}
+                <div className="grid grid-cols-1 gap-2 items-end">
+                  <div className="mt-3 text-sm opacity-80">
+                    <div>
+                      s<sub>min</sub> = max(φ, 2, 1,2·d<sub>agg</sub>) ⇒{" "}
+                      <b>depende da bitola</b> (exibido nas listas).
+                    </div>
+                    <div>
+                      Largura útil (dentro) = bw − 2·c<sub>inf</sub> − 2·φ<sub>base</sub> ={" "}
+                      <b>
+                        {tre.bw} − 2·1,5 − 2·{(tre.arm?.base_mm ?? 5) / 10} ={" "}
+                        {num(larguraDentro_cm, 2)} cm
+                      </b>
+                    </div>
+                    <div className="text-xs opacity-60 mt-1">
+                      Agregado usado internamente: {D_AGG_DEFAULT} mm (fixo — menu removido)
+                    </div>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Listas de sugestões com demonstração CABE/NÃO cabe */}
+            {/* ---------------------------------------------------------------- */}
+            {/* [SECTION] Sugestão de Arranjos que CABEM / NÃO cabem */}
+            {/* ---------------------------------------------------------------- */}
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="card p-4">
                 <h3 className="font-semibold mb-2">Sugestões (CABEM) — ordem econômica</h3>
@@ -634,7 +617,7 @@ export default function LajeBiapoiadaPage() {
                               <span className="font-medium">{descArranjo(s.n, s.diam)}</span>
                               <span className="text-xs opacity-70">
                                 s<sub>min</sub>=max({num(phi_cm, 2)},{2.0.toFixed(1)},{num(
-                                  (1.2 * dAgg_mm) / 10,
+                                  (1.2 * D_AGG_DEFAULT) / 10,
                                   2
                                 )}) → {num(smin, 2)} cm
                               </span>
@@ -671,7 +654,7 @@ export default function LajeBiapoiadaPage() {
                             <span className="font-medium">{descArranjo(s.n, s.diam)}</span>
                             <span className="text-xs">
                               s<sub>min</sub>=max({num(phi_cm, 2)},{2.0.toFixed(1)},{num(
-                                (1.2 * dAgg_mm) / 10,
+                                (1.2 * D_AGG_DEFAULT) / 10,
                                 2
                               )}) → {num(smin, 2)} cm
                             </span>
@@ -690,7 +673,9 @@ export default function LajeBiapoiadaPage() {
               </div>
             </section>
 
-            {/* Carimbo/Export */}
+            {/* ---------------------------------------------------------------- */}
+            {/* [SECTION] Carimbo / Exportação PDF */}
+            {/* ---------------------------------------------------------------- */}
             <section className="mt-6">
               <div ref={arranjoRef} className="card p-4">
                 <div className="font-semibold mb-2">
@@ -704,18 +689,11 @@ export default function LajeBiapoiadaPage() {
 
                 <div className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2 opacity-90">
                   <div>
-                    Posição: <b>{pos === "dentro" ? "dentro da mesa" : "sobre a mesa"}</b>{" "}
-                    {pos === "fora" && (
-                      <>| y = <b>{num(yFora_cm, 2)} cm</b></>
-                    )}
+                    Posição: <b>dentro da mesa</b>
                   </div>
                   <div>
                     Largura disponível:{" "}
-                    <b>
-                      {pos === "dentro"
-                        ? `${num(larguraDentro_cm, 2)} cm`
-                        : `${num(larguraFora_cm, 2)} cm`}
-                    </b>
+                    <b>{`${num(larguraDentro_cm, 2)} cm`}</b>
                   </div>
                   <div>
                     Verificação s<sub>min</sub>: conforme NBR — mostrado nas listas acima.
@@ -744,3 +722,6 @@ export default function LajeBiapoiadaPage() {
     </main>
   );
 }
+// ======================================================================
+// [END OF FILE]
+// ======================================================================

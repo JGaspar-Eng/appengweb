@@ -19,6 +19,8 @@ export type Trelica = {
     diag_mm: number;  // diâmetro das diagonais (mm)
     base_mm: number;  // diâmetro do banzo inferior (mm)
   };
+  // opcional: rótulo amigável exibido no select (não afeta cálculos)
+  displayName?: string;
 };
 
 export type Concreto = {
@@ -141,6 +143,17 @@ export const TRELICAS: Record<string, Trelica> = {
     arm: { top_mm: 8.0, diag_mm: 5.0, base_mm: 7.0 },
   },
 };
+
+// -- Gerar displayName amigável automaticamente (se não estiver preenchido)
+// LT é dado por h + hf (ex.: h=10, hf=4 -> LT14).
+Object.entries(TRELICAS).forEach(([key, tr]) => {
+  if (tr && !tr.displayName) {
+    const hVal = Number.isFinite(tr.h) ? tr.h : (tr.h_trelica_cm ?? 0);
+    const hfVal = Number.isFinite(tr.hf) ? tr.hf : C_SUP_PADRAO_CM;
+    const lt = Math.round(hVal + hfVal);
+    tr.displayName = `${key} — LT${lt} (${hVal} + ${hfVal})`;
+  }
+});
 
 // -----------------------------
 // Helpers para gerar tabelas
