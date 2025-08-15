@@ -77,3 +77,7 @@ storybook-static/
 .cache/
 .tmp/
 ~$*
+
+# Ignorar desenhos CAD
+*.dxf
+*.dwg
