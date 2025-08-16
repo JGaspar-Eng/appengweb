@@ -81,3 +81,8 @@ storybook-static/
 # Ignorar desenhos CAD
 *.dxf
 *.dwg
+
+# Backups gerados
+/backups/
+
+*.bundle
