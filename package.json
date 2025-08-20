@@ -1,13 +1,16 @@
 {
   "name": "appengweb",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {"type": "git", "url": "<URL-do-repo>"},
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest"
+    "test": "vitest",
+    "backup": "node run-backup.js"
   },
   "dependencies": {
     "@tarikjabiri/dxf": "^2.8.9",
