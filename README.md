@@ -39,6 +39,16 @@ Projeto Next.js iniciado com create-next-app.
 npm install
 ```
 
+## Configuração
+
+Copie o arquivo de exemplo de variáveis de ambiente:
+
+```bash
+cp .env.example .env.local
+```
+
+Edite `.env.local` e preencha os valores conforme seu ambiente.
+
 ## Uso
 
 Rode o servidor de desenvolvimento:
