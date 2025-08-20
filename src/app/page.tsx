@@ -7,7 +7,7 @@ import Footer from "@/app/components/Footer";
 
 export default function WelcomePage() {
   const { login } = useAuth();
-  const [usuario, setUsuario] = useState("");
+  const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,7 +17,7 @@ export default function WelcomePage() {
     setErro("");
     setLoading(true);
     try {
-      await login(usuario, senha);
+      await login(email, senha);
     } catch (err: any) {
       setErro(err.message || "Erro ao efetuar login.");
     } finally {
@@ -35,13 +35,13 @@ export default function WelcomePage() {
       <div className="card p-10 mt-6 max-w-md mx-auto">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <input
-            type="text"
+            type="email"
             placeholder="E-mail"
-            value={usuario}
-            onChange={(e) => setUsuario(e.target.value)}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             className="border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 text-[var(--color-text)] bg-[var(--color-card)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] transition"
             required
-            autoComplete="username"
+            autoComplete="email"
           />
           <input
             type="password"

@@ -2,28 +2,10 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 
-function setUserCookie(email: string | null) {
-  if (typeof window === "undefined") return;
-  const isHttps = window.location.protocol === "https:";
-  const baseAttrs = `path=/; SameSite=Strict${isHttps ? "; Secure" : ""}`;
-
-  if (email) {
-    document.cookie = `user=${encodeURIComponent(email)}; max-age=43200; ${baseAttrs}`;
-  } else {
-    document.cookie = `user=; max-age=0; ${baseAttrs}`;
-  }
-}
-
-function getUserCookie(): string | null {
-  if (typeof window === "undefined") return null;
-  const match = document.cookie.match(/(?:^|;\s*)user=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
 interface AuthContextType {
   user: string | null;
   login: (email: string, senha: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,33 +16,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Se estiver na tela inicial (login), limpa cookie e usuário
-    if (pathname === "/") {
-      setUserCookie(null);
-      setUser(null);
-      return;
+    async function checkSession() {
+      if (pathname === "/") {
+        setUser(null);
+        return;
+      }
+      try {
+        const res = await fetch("/api/auth/session", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.authenticated ? data.email : null);
+        } else {
+          setUser(null);
+        }
+      } catch {
+        setUser(null);
+      }
     }
-
-    const savedUser = getUserCookie();
-    if (savedUser) setUser(savedUser);
+    checkSession();
   }, [pathname]);
 
   async function login(email: string, senha: string) {
-    if (
-      email === process.env.NEXT_PUBLIC_LOGIN_EMAIL &&
-      senha === process.env.NEXT_PUBLIC_LOGIN_SENHA
-    ) {
-      setUser(email);
-      setUserCookie(email);
-      router.push("/dashboard");
-    } else {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, senha }),
+    });
+    if (!res.ok) {
       throw new Error("E-mail ou senha inválidos.");
     }
+    const sessionRes = await fetch("/api/auth/session", { cache: "no-store" });
+    if (sessionRes.ok) {
+      const data = await sessionRes.json();
+      if (data.authenticated) {
+        setUser(data.email);
+        router.push("/dashboard");
+        return;
+      }
+    }
+    throw new Error("Erro ao efetuar login.");
   }
 
-  function logout() {
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
-    setUserCookie(null);
     router.push("/");
   }
 

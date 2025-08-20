@@ -10,7 +10,9 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
-    "backup": "node run-backup.js"
+    "backup": "node run-backup.js",
+    "bundle:cleanup": "node scripts/cleanup-bundles.js",
+    "bundle:upload": "node scripts/upload-bundle.js"
   },
   "dependencies": {
     "@tarikjabiri/dxf": "^2.8.9",

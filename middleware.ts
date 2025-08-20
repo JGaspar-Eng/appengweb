@@ -12,6 +12,7 @@ export async function middleware(request: NextRequest) {
   const isLogin = pathname.startsWith("/login");
   const isPublic = pathname === "/" || isLogin;
 
+codex/refactor-session-api-call-in-middleware
   if (isPublic) {
     return NextResponse.next();
   } else {
@@ -20,6 +21,14 @@ export async function middleware(request: NextRequest) {
     if (!authToken) {
       return redirectToLogin(request);
     }
+=======
+  if (isPublic) return NextResponse.next();
+
+  const authToken = request.cookies.get("auth_token")?.value;
+  if (!authToken) {
+    return redirectToLogin(request);
+  }
+main
 
     try {
       const sessionResponse = await fetch(
@@ -45,7 +54,15 @@ export async function middleware(request: NextRequest) {
       return redirectToLogin(request);
     }
 
+codex/refactor-session-api-call-in-middleware
     return NextResponse.next();
+    const session = await sessionResponse.json();
+    if (!session.authenticated) {
+      return redirectToLogin(request);
+    }
+  } catch {
+    return redirectToLogin(request);
+    main
   }
 }
 
