@@ -47,7 +47,7 @@ Copie o arquivo de exemplo de variáveis de ambiente:
 cp .env.example .env.local
 ```
 
-Edite `.env.local` e preencha os valores conforme seu ambiente. Defina `LOGIN_EMAIL` e `LOGIN_SENHA` com as credenciais de acesso; essas variáveis são usadas apenas no servidor e não são expostas ao cliente.
+Edite `.env.local` e preencha os valores conforme seu ambiente. Defina **apenas** `LOGIN_EMAIL` e `LOGIN_SENHA` com as credenciais de acesso; essas variáveis são usadas apenas no servidor e não são expostas ao cliente. As antigas variáveis `NEXT_PUBLIC_LOGIN_EMAIL` e `NEXT_PUBLIC_LOGIN_SENHA` foram removidas.
 
 ## Uso
 

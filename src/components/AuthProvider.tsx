@@ -45,18 +45,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (savedUser) setUser(savedUser);
   }, [pathname]);
 
-  async function login(email: string, senha: string) {
-    if (
-      email === process.env.NEXT_PUBLIC_LOGIN_EMAIL &&
-      senha === process.env.NEXT_PUBLIC_LOGIN_SENHA
-    ) {
-      setUser(email);
-      setUserCookie(email);
-      router.push("/dashboard");
-    } else {
-      throw new Error("E-mail ou senha inválidos.");
+    async function login(email: string, senha: string) {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ usuario: email, senha }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setUser(email);
+        setUserCookie(email);
+        router.push("/dashboard");
+      } else {
+        throw new Error(data.message || "E-mail ou senha inválidos.");
+      }
     }
-  }
 
   function logout() {
     setUser(null);
