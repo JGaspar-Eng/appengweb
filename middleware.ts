@@ -12,40 +12,41 @@ export async function middleware(request: NextRequest) {
   const isLogin = pathname.startsWith("/login");
   const isPublic = pathname === "/" || isLogin;
 
-  // Permite acesso às páginas públicas
-  if (isPublic) return NextResponse.next();
+  if (isPublic) {
+    return NextResponse.next();
+  } else {
+    // Verifica se existe token de autenticação
+    const authToken = request.cookies.get("auth_token")?.value;
+    if (!authToken) {
+      return redirectToLogin(request);
+    }
 
-  // Verifica se existe token de autenticação
-  const authToken = request.cookies.get("auth_token")?.value;
-  if (!authToken) {
-    return redirectToLogin(request);
-  }
+    try {
+      const sessionResponse = await fetch(
+        `${request.nextUrl.origin}/api/auth/session`,
+        {
+          headers: {
+            cookie: request.headers.get("cookie") ?? "",
+          },
+          cache: "no-store",
+        }
+      );
 
-  try {
-    const sessionResponse = await fetch(
-      `${request.nextUrl.origin}/api/auth/session`,
-      {
-        headers: {
-          cookie: request.headers.get("cookie") ?? "",
-        },
-        cache: "no-store",
+      if (!sessionResponse.ok) {
+        return redirectToLogin(request);
       }
-    );
 
-    if (!sessionResponse.ok) {
+      const session = await sessionResponse.json();
+      const isAuthenticated = session?.user || session?.authenticated;
+      if (!isAuthenticated) {
+        return redirectToLogin(request);
+      }
+    } catch {
       return redirectToLogin(request);
     }
 
-    const session = await sessionResponse.json();
-    const isAuthenticated = session?.user || session?.authenticated;
-    if (!isAuthenticated) {
-      return redirectToLogin(request);
-    }
-  } catch {
-    return redirectToLogin(request);
+    return NextResponse.next();
   }
-
-  return NextResponse.next();
 }
 
 export const config = {
