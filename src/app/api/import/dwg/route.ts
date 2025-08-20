@@ -2,24 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
-import { execFile } from "child_process";
+import { execFile, execSync } from "child_process";
 import { promisify } from "util";
 
 const pexecFile = promisify(execFile);
 
-// Ajuste: aponto primeiro para variável de ambiente; se não houver, tenta alguns caminhos comuns no Windows.
+// Resolve o caminho do ODAFileConverter buscando na variável de ambiente ou no PATH.
 function resolveOdaConverterPath(): string {
   const envPath = process.env.ODA_CONVERTER;
   if (envPath) return envPath;
 
-  const candidates = [
-    "C:\\Program Files\\ODA\\ODAFileConverter\\ODAFileConverter.exe",
-    "C:\\Program Files\\ODA\\ODAFileConverter 25.12.0\\ODAFileConverter.exe",
-    "C:\\Program Files\\ODA\\ODAFileConverter 25.10.0\\ODAFileConverter.exe",
-  ];
-  for (const c of candidates) {
-    // não dá para checar sincrono em edge; route padrão node roda ok:
-    try { require("fs").accessSync(c); return c; } catch {}
+  const which = process.platform === "win32" ? "where" : "which";
+  try {
+    const found = execSync(`${which} ODAFileConverter`, { encoding: "utf-8" })
+      .split(/\r?\n/)[0]
+      .trim();
+    if (found) return found;
+  } catch {
+    // ignorado
   }
   return ""; // força erro amigável abaixo
 }
