@@ -90,3 +90,9 @@ storybook-static/
 # Scripts locais (não versionados)
 scripts/local/*
 !scripts/local/.gitkeep
+
+# Listagens e scripts/logs locais
+listagem*.txt
+/*.ps1
+/*.sh
+/*.log
