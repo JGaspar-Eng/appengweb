@@ -1,5 +1,6 @@
 // middleware.ts
 import { NextRequest, NextResponse } from "next/server";
+import { AUTH_COOKIE } from "@/lib/auth";
 
 function redirectToLogin(request: NextRequest) {
   const url = request.nextUrl.clone();
@@ -16,14 +17,14 @@ export async function middleware(request: NextRequest) {
   if (isPublic) return NextResponse.next();
 
   // Verifica se existe token de autenticação
-  const authToken = request.cookies.get("auth_token")?.value;
+  const authToken = request.cookies.get(AUTH_COOKIE)?.value;
   if (!authToken) {
     return redirectToLogin(request);
   }
 
   try {
     const sessionResponse = await fetch(
-      `${request.nextUrl.origin}/api/auth/session`,
+      `${request.nextUrl.origin}/api/session`,
       {
         headers: {
           cookie: request.headers.get("cookie") ?? "",

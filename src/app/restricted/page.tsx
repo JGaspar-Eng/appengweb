@@ -1,10 +1,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { AUTH_COOKIE } from "@/lib/auth";
 
 export default async function RestrictedPage() {
   const jar = cookies();
-  const session = jar.get("session")?.value;
-  if (!session) redirect("/login");
+  const token = jar.get(AUTH_COOKIE)?.value;
+  if (!token) redirect("/login");
 
   // Conteúdo restrito
   return (
