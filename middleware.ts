@@ -30,6 +30,7 @@ export async function middleware(request: NextRequest) {
             cookie: request.headers.get("cookie") ?? "",
           },
           cache: "no-store",
+          credentials: "include",
         }
       );
 
