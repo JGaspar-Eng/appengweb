@@ -1,6 +1,8 @@
 {
   "name": "appengweb",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {"type": "git", "url": "<URL-do-repo>"},
   "private": true,
   "scripts": {
     "dev": "next dev",

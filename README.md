@@ -63,8 +63,16 @@ pnpm dev
 bun dev
 ```
 
-Abra [http://localhost:3000](http://localhost:3000) no navegador para ver o resultado. 
+Abra [http://localhost:3000](http://localhost:3000) no navegador para ver o resultado.
 Você pode começar a editar modificando `src/app/page.tsx`. As alterações são aplicadas automaticamente.
+
+## Backup
+
+Crie um pacote de backup e envie para o repositório:
+
+```bash
+npm run backup
+```
 
 ## Testes
 
