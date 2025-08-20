@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
+import tokenStore from "@/lib/authStore";
 
-const EMAIL = process.env.LOGIN_EMAIL;         // NÃO usar NEXT_PUBLIC_ aqui
+const EMAIL = process.env.LOGIN_EMAIL; // NÃO usar NEXT_PUBLIC_ aqui
 const SENHA = process.env.LOGIN_SENHA;
 
 export async function POST(req: NextRequest) {
@@ -12,12 +14,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { usuario, senha } = await req.json();
+    const { email, senha } = await req.json();
 
-    if (usuario === EMAIL && senha === SENHA) {
+    if (email === EMAIL && senha === SENHA) {
+      const token = randomBytes(32).toString("hex");
+      tokenStore.set(token, email);
       const res = NextResponse.json({ success: true }, { status: 200 });
-      // Cookie HttpOnly contendo o email (para leitura server-side)
-      res.cookies.set("session", encodeURIComponent(usuario), {
+      res.cookies.set("auth_token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
