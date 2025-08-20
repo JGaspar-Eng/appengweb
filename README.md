@@ -74,6 +74,20 @@ Execute a suíte de testes:
 npm test
 ```
 
+## Backup
+
+Crie um snapshot do repositório (git bundle) executando:
+
+```bash
+npm run backup
+```
+
+O bundle será salvo em `backups/` com timestamp. Para também enviar as alterações ao remoto padrão, utilize:
+
+```bash
+npm run backup -- --push
+```
+
 ## Contribuição
 
 1. Faça um fork do projeto.
