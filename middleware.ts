@@ -17,20 +17,25 @@ export async function middleware(request: NextRequest) {
   }
 
   const authToken = request.cookies.get("auth_token")?.value;
+  console.log("auth_token recebido:", authToken);
   if (!authToken) {
     return redirectToLogin(request);
   }
 
   try {
     const sessionResponse = await fetch(
-      `${request.nextUrl.origin}/api/auth/session`,
-      {
-        headers: {
-          cookie: request.headers.get("cookie") ?? "",
-        },
-        cache: "no-store",
-      }
-    );
+        `${request.nextUrl.origin}/api/auth/session`,
+        {
+          headers: {
+            cookie: request.headers.get("cookie") ?? "",
+          },
+          cache: "no-store",
+        }
+      );
+
+    console.log("status /api/auth/session:", sessionResponse.status);
+    const sessionPayload = await sessionResponse.clone().json();
+    console.log("payload /api/auth/session:", sessionPayload);
 
     if (!sessionResponse.ok) {
       return redirectToLogin(request);
