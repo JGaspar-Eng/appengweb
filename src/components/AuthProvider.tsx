@@ -2,28 +2,10 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 
-function setUserCookie(email: string | null) {
-  if (typeof window === "undefined") return;
-  const isHttps = window.location.protocol === "https:";
-  const baseAttrs = `path=/; SameSite=Strict${isHttps ? "; Secure" : ""}`;
-
-  if (email) {
-    document.cookie = `user=${encodeURIComponent(email)}; max-age=43200; ${baseAttrs}`;
-  } else {
-    document.cookie = `user=; max-age=0; ${baseAttrs}`;
-  }
-}
-
-function getUserCookie(): string | null {
-  if (typeof window === "undefined") return null;
-  const match = document.cookie.match(/(?:^|;\s*)user=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
 interface AuthContextType {
   user: string | null;
   login: (email: string, senha: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,34 +15,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {
-    // Se estiver na tela inicial (login), limpa cookie e usuário
-    if (pathname === "/") {
-      setUserCookie(null);
+  async function checkSession() : Promise<boolean> {
+    try {
+      const res = await fetch("/api/session");
+      if (!res.ok) {
+        setUser(null);
+        return false;
+      }
+      const data = await res.json();
+      if (data.authenticated) {
+        setUser(data.email);
+        return true;
+      }
       setUser(null);
-      return;
-    }
-
-    const savedUser = getUserCookie();
-    if (savedUser) setUser(savedUser);
-  }, [pathname]);
-
-  async function login(email: string, senha: string) {
-    if (
-      email === process.env.NEXT_PUBLIC_LOGIN_EMAIL &&
-      senha === process.env.NEXT_PUBLIC_LOGIN_SENHA
-    ) {
-      setUser(email);
-      setUserCookie(email);
-      router.push("/dashboard");
-    } else {
-      throw new Error("E-mail ou senha inválidos.");
+      return false;
+    } catch {
+      setUser(null);
+      return false;
     }
   }
 
-  function logout() {
-    setUser(null);
-    setUserCookie(null);
+  useEffect(() => {
+    (async () => {
+      const authenticated = await checkSession();
+      if (authenticated && pathname === "/") router.push("/dashboard");
+      if (!authenticated && pathname !== "/") router.push("/");
+    })();
+  }, [pathname]);
+
+  async function login(email: string, senha: string) {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario: email, senha }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || "E-mail ou senha inválidos.");
+    }
+    await checkSession();
+    router.push("/dashboard");
+  }
+
+  async function logout() {
+    await fetch("/api/logout", { method: "POST" });
+    await checkSession();
     router.push("/");
   }
 
