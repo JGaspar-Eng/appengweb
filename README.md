@@ -115,11 +115,18 @@ yarn dev
 pnpm dev
 # ou
 bun dev
+```
 Abra http://localhost:3000 no navegador para ver o resultado.
 
 Você pode começar a editar a página modificando src/app/page.tsx. A página é atualizada automaticamente conforme você salva o arquivo.
 
 Este projeto utiliza next/font para otimizar e carregar automaticamente a fonte Geist, da Vercel.
+
+## 💻 Uso em diferentes sistemas operacionais
+
+- Defina a variável de ambiente `ODA_CONVERTER` apontando para o executável ODAFileConverter.
+- Para criar um bundle de backup utilize `node run-backup.js` (requer PowerShell instalado e funciona em Windows, Linux e macOS).
+- Scripts específicos de cada máquina podem ser colocados em `scripts/local/` (pasta ignorada pelo Git).
 
 📚 Saiba Mais
 Documentação do Next.js
@@ -191,7 +198,6 @@ Repositório Next.js no GitHub
 │       🟩 └── persistencia.ts
 │
 🟩 ├── .gitignore                       # Lista arquivos ignorados pelo Git
-🟩 ├── appengweb.ps1                    # Script PowerShell personalizado
 🟩 ├── eslint.config.mjs                 # Configuração de lint
 🟩 ├── middleware.ts                    # Middleware do Next.js
 🟥 ├── next-env.d.ts                     # Gerado automaticamente pelo Next.js
@@ -200,6 +206,7 @@ Repositório Next.js no GitHub
 🟥 ├── package-lock.json                  # Controle de versão exata das libs
 🟩 ├── postcss.config.js                  # Configuração do PostCSS
 🟩 ├── README.md                         # Documentação do projeto
+🟩 ├── run-backup.js                    # Script Node para backup cross-platform
 🟩 ├── script-limpar-cache-appengweb.ps1 # Script PowerShell para limpar cache
 🟩 ├── tailwind.config.js                # Configuração do TailwindCSS
 🟩 └── tsconfig.json                     # Configuração do TypeScript

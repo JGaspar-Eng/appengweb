@@ -86,3 +86,7 @@ storybook-static/
 /backups/
 
 *.bundle
+
+# Scripts locais (não versionados)
+scripts/local/*
+!scripts/local/.gitkeep
