@@ -12,10 +12,8 @@ export async function middleware(request: NextRequest) {
   const isLogin = pathname.startsWith("/login");
   const isPublic = pathname === "/" || isLogin;
 
-  // Permite acesso às páginas públicas
   if (isPublic) return NextResponse.next();
 
-  // Verifica se existe token de autenticação
   const authToken = request.cookies.get("auth_token")?.value;
   if (!authToken) {
     return redirectToLogin(request);
@@ -37,8 +35,7 @@ export async function middleware(request: NextRequest) {
     }
 
     const session = await sessionResponse.json();
-    const isAuthenticated = session?.user || session?.authenticated;
-    if (!isAuthenticated) {
+    if (!session.authenticated) {
       return redirectToLogin(request);
     }
   } catch {
