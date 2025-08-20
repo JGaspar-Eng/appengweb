@@ -1,11 +1,20 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { middleware } from "../../middleware";
 
 describe("middleware", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(global, "fetch");
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
   test("rotas públicas não disparam verificação de sessão", async () => {
     const request = new NextRequest("http://localhost/");
-    const fetchSpy = vi.spyOn(global, "fetch");
 
     const response = await middleware(request);
 
