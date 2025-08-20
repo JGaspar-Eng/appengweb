@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       const res = NextResponse.json({ success: true }, { status: 200 });
       res.cookies.set("auth_token", token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: process.env.NODE_ENV === "production", // usa cookie secure apenas em produção (HTTPS)
         sameSite: "strict",
         path: "/",
         maxAge: 60 * 60, // 1h
