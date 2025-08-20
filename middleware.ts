@@ -1,6 +1,12 @@
 // middleware.ts
 import { NextRequest, NextResponse } from "next/server";
 
+function redirectToLogin(request: NextRequest) {
+  const url = request.nextUrl.clone();
+  url.pathname = "/";
+  return NextResponse.redirect(url);
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isLogin = pathname.startsWith("/login");
@@ -12,9 +18,7 @@ export async function middleware(request: NextRequest) {
   // Verifica se existe token de autenticação
   const authToken = request.cookies.get("auth_token")?.value;
   if (!authToken) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
+    return redirectToLogin(request);
   }
 
   try {
@@ -22,33 +26,28 @@ export async function middleware(request: NextRequest) {
       `${request.nextUrl.origin}/api/auth/session`,
       {
         headers: {
-          cookie: `auth_token=${authToken}`,
+          cookie: request.headers.get("cookie") ?? "",
         },
+        cache: "no-store",
       }
     );
 
     if (!sessionResponse.ok) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/";
-      return NextResponse.redirect(url);
+      return redirectToLogin(request);
     }
 
     const session = await sessionResponse.json();
     const isAuthenticated = session?.user || session?.authenticated;
     if (!isAuthenticated) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/";
-      return NextResponse.redirect(url);
+      return redirectToLogin(request);
     }
   } catch {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
+    return redirectToLogin(request);
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/calculadoras/:path*", "/dashboard", "/calculadoras"],
+  matcher: ["/dashboard/:path*", "/calculadoras/:path*"],
 };
