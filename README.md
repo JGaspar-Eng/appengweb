@@ -66,14 +66,6 @@ bun dev
 Abra [http://localhost:3000](http://localhost:3000) no navegador para ver o resultado.
 Você pode começar a editar modificando `src/app/page.tsx`. As alterações são aplicadas automaticamente.
 
-## Backup
-
-Crie um pacote de backup e envie para o repositório:
-
-```bash
-npm run backup
-```
-
 ## Testes
 
 Execute a suíte de testes:
@@ -82,19 +74,16 @@ Execute a suíte de testes:
 npm test
 ```
 
-## Backup
+## Scripts de manutenção
 
-Crie um snapshot do repositório (git bundle) executando:
+Os utilitários abaixo são escritos em Node.js e funcionam em qualquer sistema operacional:
 
-```bash
-npm run backup
-```
+- **Backup e push**: `npm run backup` cria um bundle em `backups/` e pode enviar commits com `--push`.
+- **Push simples**: `node scripts/push-to-github.js` apenas commita e envia alterações.
+- **Limpar bundles antigos**: `npm run bundle:cleanup -- [--keep-last N | --older-than-days D]` remove arquivos antigos.
+- **Enviar bundle**: `npm run bundle:upload -- [--mode scp|gh] [opções]` envia o bundle via SCP ou GitHub release.
 
-O bundle será salvo em `backups/` com timestamp. Para também enviar as alterações ao remoto padrão, utilize:
-
-```bash
-npm run backup -- --push
-```
+Scripts específicos de Windows, como criação de atalhos ou tarefas agendadas, devem ser mantidos em `scripts/local/`, diretório ignorado pelo Git.
 
 ## Contribuição
 
