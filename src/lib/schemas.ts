@@ -10,11 +10,27 @@ const TrelicaSchema = z.object({
 });
 
 export const TrelicasSchema = z.record(TrelicaSchema);
-export const ConcretosSchema = z.record(z.number());
-export const AcoesSchema = z.record(z.number());
 
-// TABELA_K: matriz de números (cada linha inicia por Bx)
-export const TabelaKSchema = z.array(z.array(z.number().finite()));
+// Cada concreto possui resistência característica (fck) e de cálculo (fcd)
+export const ConcretosSchema = z.record(
+  z.object({
+    fck: z.number(),
+    fcd: z.number(),
+  })
+);
+
+// Cada aço possui resistência característica (fyk) e de cálculo (fyd)
+export const AcoesSchema = z.record(
+  z.object({
+    fyk: z.number(),
+    fyd: z.number(),
+  })
+);
+
+// TABELA_K: matriz de números (cada linha inicia por Bx) permitindo valores nulos nas colunas de ks
+export const TabelaKSchema = z.array(
+  z.array(z.number().finite().nullable())
+);
 
 // Pacote completo que esperamos em "@/components/constantes"
 export const ConstantesSchema = z.object({

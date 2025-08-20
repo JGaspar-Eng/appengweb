@@ -122,6 +122,14 @@ Você pode começar a editar a página modificando src/app/page.tsx. A página �
 
 Este projeto utiliza next/font para otimizar e carregar automaticamente a fonte Geist, da Vercel.
 
+## 🧪 Testes
+
+Execute a suíte de testes com o comando:
+
+```bash
+npm test
+```
+
 ## 💻 Uso em diferentes sistemas operacionais
 
 - Defina a variável de ambiente `ODA_CONVERTER` apontando para o executável ODAFileConverter.
