@@ -35,7 +35,11 @@ Projeto Next.js iniciado com create-next-app.
 
 ## Instalação
 
+Clone o repositório e instale as dependências:
+
 ```bash
+git clone https://github.com/JGaspar-Eng/appengweb.git
+cd appengweb
 npm install
 ```
 
@@ -87,10 +91,11 @@ Scripts específicos de Windows, como criação de atalhos ou tarefas agendadas,
 
 ## Contribuição
 
-1. Faça um fork do projeto.
+1. Faça um fork do projeto em [https://github.com/JGaspar-Eng/appengweb](https://github.com/JGaspar-Eng/appengweb).
 2. Crie uma branch para sua feature (`git checkout -b minha-feature`).
 3. Commit suas alterações (`git commit -m 'Minha feature'`).
-4. Envie para o GitHub (`git push origin minha-feature`) e abra um Pull Request.
+4. Garanta que testes e lint passem (`npm test` e `npm run lint`).
+5. Envie para o GitHub (`git push origin minha-feature`) e abra um Pull Request.
 
 ---
 
